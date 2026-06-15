@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+:root {
+  /* 夜晚暖光（默认主题） */
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-card: #fefce8;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --accent: #f59e0b;
+  --accent-rose: #f472b6;
+  --accent-rose-gold: linear-gradient(135deg, #f472b6, #fbbf24);
+  --border: #334155;
+}
+
+[data-theme="garden"] {
+  /* 晨间花园 */
+  --bg-primary: #fefce8;
+  --bg-secondary: #f0fdf4;
+  --bg-card: #ffffff;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --accent: #22c55e;
+  --accent-rose: #f472b6;
+  --accent-rose-gold: linear-gradient(135deg, #22c55e, #a3e635);
+  --border: #e2e8f0;
+}
+
+[data-theme="cosmos"] {
+  /* 显化星空 */
+  --bg-primary: #1e1b4b;
+  --bg-secondary: #312e81;
+  --bg-card: #312e81;
+  --text-primary: #e0e7ff;
+  --text-secondary: #a5b4fc;
+  --accent: #f472b6;
+  --accent-rose: #f472b6;
+  --accent-rose-gold: linear-gradient(135deg, #f472b6, #c084fc);
+  --border: #4338ca;
+}
