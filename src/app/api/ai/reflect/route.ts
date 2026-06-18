@@ -11,9 +11,10 @@ interface ReflectRequestBody {
   recentContext?: string;
 }
 
-const UPSTREAM_URL = (process.env.DEEPSEEK_BASE_URL || 'https://www.dreamfield.top') + '/v1/chat/completions';
-const UPSTREAM_MODEL = process.env.DEEPSEEK_MODEL || 'DeepSeek-V4-Flash';
-const UPSTREAM_KEY = process.env.DEEPSEEK_API_KEY!;
+// Accept both DEEPSEEK_* and ANTHROPIC_* env var names
+const UPSTREAM_URL = (process.env.DEEPSEEK_BASE_URL || process.env.ANTHROPIC_BASE_URL || 'https://www.dreamfield.top') + '/v1/chat/completions';
+const UPSTREAM_MODEL = process.env.DEEPSEEK_MODEL || process.env.ANTHROPIC_MODEL || 'DeepSeek-V4-Flash';
+const UPSTREAM_KEY = process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || '';
 
 /**
  * The dreamfield DeepSeek proxy lies about its response encoding: it sends
