@@ -37,6 +37,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# stray folder
+/显化日记
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
