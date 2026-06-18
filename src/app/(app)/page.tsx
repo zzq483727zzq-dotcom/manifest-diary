@@ -1,12 +1,50 @@
-export default function HomePage() {
+import { createClient } from '@/lib/supabase/server';
+import { computeEntryDate, formatDateZh, APP_TIMEZONE } from '@/lib/date';
+import { MorningGreeting } from '@/components/morning/MorningGreeting';
+import { ScriptStepRow } from '@/components/morning/ScriptStepRow';
+import { EmptyState } from '@/components/morning/EmptyState';
+
+interface Step {
+  step: number;
+  action: string;
+  duration_minutes: number;
+  completed_at: string | null;
+}
+
+export default async function HomePage() {
+  const supabase = await createClient();
+  const today = computeEntryDate(new Date(), APP_TIMEZONE);
+
+  const { data: script } = await supabase
+    .from('tomorrow_scripts')
+    .select('*')
+    .eq('scheduled_for', today)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const steps = (script?.steps as Step[] | undefined) ?? [];
+
   return (
-    <div className="text-center py-12">
-      <h1 className="text-2xl font-light" style={{ color: 'var(--text-primary)' }}>
-        晚上好 ✨
-      </h1>
-      <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>
-        准备好今晚的复盘了吗？
-      </p>
+    <div>
+      <MorningGreeting hasScript={steps.length > 0} date={formatDateZh(today)} />
+      {steps.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <div className="space-y-3 max-w-xl mx-auto">
+          {steps.map((s, i) => (
+            <ScriptStepRow
+              key={i}
+              scriptId={script!.id}
+              stepIdx={i}
+              step={s.step}
+              action={s.action}
+              durationMin={s.duration_minutes}
+              initiallyDone={s.completed_at !== null}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
