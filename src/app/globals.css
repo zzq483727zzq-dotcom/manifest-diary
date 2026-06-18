@@ -38,3 +38,62 @@
   --accent-rose-gold: linear-gradient(135deg, #f472b6, #c084fc);
   --border: #4338ca;
 }
+
+/* 通用深度变量 */
+[data-theme="night"] {
+  --shadow-soft: 0 4px 24px rgba(0, 0, 0, 0.35);
+  --shadow-glow: 0 0 32px rgba(244, 114, 182, 0.18);
+  --bg-card-glow: rgba(254, 252, 232, 0.05);
+  --noise-opacity: 0.03;
+}
+
+[data-theme="garden"] {
+  --shadow-soft: 0 2px 16px rgba(34, 197, 94, 0.08);
+  --shadow-glow: 0 0 24px rgba(244, 114, 182, 0.15);
+  --bg-card-glow: rgba(255, 255, 255, 0.6);
+  --noise-opacity: 0;
+}
+
+[data-theme="cosmos"] {
+  --shadow-soft: 0 4px 32px rgba(67, 56, 202, 0.4);
+  --shadow-glow: 0 0 40px rgba(244, 114, 182, 0.3);
+  --bg-card-glow: rgba(49, 46, 129, 0.4);
+  --noise-opacity: 0.04;
+}
+
+/* 顺滑切换 */
+html {
+  transition: background-color 0.4s ease;
+}
+html[data-theme] body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+/* 玫瑰金渐变文字工具类 */
+.text-rose-gold {
+  background: var(--accent-rose-gold);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* 玫瑰金光晕边框 */
+.glow-border {
+  position: relative;
+}
+.glow-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--accent-rose-gold);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.6;
+}
