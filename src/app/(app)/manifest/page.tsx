@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { StarfieldBackground } from "@/components/manifest/StarfieldBackground";
 import { CategorySelector } from "@/components/manifest/CategorySelector";
 import { IntentionInput } from "@/components/manifest/IntentionInput";
@@ -20,6 +21,14 @@ export default function ManifestPage() {
   const [todayEntries, setTodayEntries] = useState<ManifestEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Drives the starfield "stardust convergence" feedback while writing.
+  const [isTyping, setIsTyping] = useState(false);
+
+  // Treat the user as "typing" whenever the intention has any content.
+  // Decoupled from focus so the convergence persists between keystrokes.
+  useEffect(() => {
+    setIsTyping(intention.trim().length > 0);
+  }, [intention]);
 
   const handleSubmit = useCallback(async () => {
     if (!intention.trim() || !category || isProcessing) return;
@@ -110,13 +119,28 @@ export default function ManifestPage() {
   }, [intention, category, isProcessing]);
 
   return (
-    <div className="relative overflow-hidden" style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}>
-      <StarfieldBackground />
+    <div
+      className="relative overflow-hidden"
+      style={{ background: "transparent", color: "var(--text-primary)" }}
+    >
+      <StarfieldBackground isTyping={isTyping || isProcessing} />
       <div className="relative z-10 max-w-2xl mx-auto px-4 py-8 space-y-8">
-        <header className="text-center space-y-2">
-          <h1 className="text-2xl font-light tracking-wider text-white/90">✨ 显化仪式</h1>
-          <p className="text-sm text-white/30">写下你的意图，宇宙会回应</p>
-        </header>
+        <motion.header
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          className="text-center space-y-2"
+        >
+          <h1
+            className="text-3xl font-light tracking-[0.18em] text-white/90"
+            style={{ fontFamily: "'Georgia', 'Noto Serif SC', serif" }}
+          >
+            ✨ 显化仪式
+          </h1>
+          <p className="text-sm text-white/40 tracking-wide">
+            写下你的意图，宇宙会回应
+          </p>
+        </motion.header>
 
         <section>
           <CategorySelector selected={category} onSelect={setCategory} />
@@ -131,37 +155,71 @@ export default function ManifestPage() {
           />
         </section>
 
-        {error && (
-          <div className="mx-auto max-w-md p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm">
-            {error}
-          </div>
-        )}
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              key="error"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              className="mx-auto max-w-md p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm"
+            >
+              {error}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {(echo || isProcessing) && (
-          <section className="space-y-4">
-            <EchoBubble echo={echo ?? ""} isLoading={isProcessing && !echo} />
-            {keywords.length > 0 && <KeywordTags keywords={keywords} />}
-            {insight && (
-              <p className="text-center text-white/40 text-sm italic">💡 {insight}</p>
-            )}
-          </section>
-        )}
+        <AnimatePresence>
+          {(echo || isProcessing) && (
+            <motion.section
+              key="echo-section"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+              className="space-y-4"
+            >
+              <EchoBubble echo={echo ?? ""} isLoading={isProcessing && !echo} />
+              {keywords.length > 0 && <KeywordTags keywords={keywords} />}
+              {insight && (
+                <motion.p
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3, duration: 0.5 }}
+                  className="text-center text-white/45 text-sm italic"
+                  style={{ fontFamily: "'Georgia', 'Noto Serif SC', serif" }}
+                >
+                  💡 {insight}
+                </motion.p>
+              )}
+            </motion.section>
+          )}
+        </AnimatePresence>
 
         {todayEntries.length > 0 && (
           <section className="space-y-3">
             <button
               onClick={() => setShowHistory(!showHistory)}
-              className="text-sm text-white/30 hover:text-white/50 transition-colors"
+              className="text-sm text-white/35 hover:text-white/65 transition-colors tracking-wide"
             >
               {showHistory ? "收起" : "查看"}今日显化（{todayEntries.length}）
             </button>
-            {showHistory && (
-              <div className="space-y-3">
-                {todayEntries.map((entry) => (
-                  <ManifestCard key={entry.id} entry={entry} />
-                ))}
-              </div>
-            )}
+            <AnimatePresence initial={false}>
+              {showHistory && (
+                <motion.div
+                  key="history"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.35 }}
+                  className="space-y-3 overflow-hidden"
+                >
+                  {todayEntries.map((entry, i) => (
+                    <ManifestCard key={entry.id} entry={entry} index={i} />
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </section>
         )}
       </div>
