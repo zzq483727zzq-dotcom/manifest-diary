@@ -1,51 +1,46 @@
 import { NextRequest } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import { logAiCall } from '@/lib/ai/log';
 import { buildReflectionPrompt } from '@/lib/ai/prompts/reflection';
 
-// Use Node runtime so we can use TextDecoder('gbk') and arbitrary fetch APIs.
-// Edge runtime in Next.js does not support non-utf-8 TextDecoder.
+// Node runtime: required for TextDecoder('gbk') with stream mode.
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// Let Vercel keep this streaming function alive long enough for the
+// reasoning model to finish thinking.
+export const maxDuration = 60;
 
 interface ReflectRequestBody {
   userInput: string;
   recentContext?: string;
 }
 
-// Accept both DEEPSEEK_* and ANTHROPIC_* env var names
-const UPSTREAM_URL = (process.env.DEEPSEEK_BASE_URL || process.env.ANTHROPIC_BASE_URL || 'https://www.dreamfield.top') + '/v1/chat/completions';
+// Accept both DEEPSEEK_* and ANTHROPIC_* env var names.
+const UPSTREAM_URL =
+  (process.env.DEEPSEEK_BASE_URL || process.env.ANTHROPIC_BASE_URL || 'https://www.dreamfield.top') +
+  '/v1/chat/completions';
 const UPSTREAM_MODEL = process.env.DEEPSEEK_MODEL || process.env.ANTHROPIC_MODEL || 'DeepSeek-V4-Flash';
 const UPSTREAM_KEY = process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || '';
 
 /**
- * The dreamfield DeepSeek proxy lies about its response encoding: it sends
- * `Content-Type: application/json; charset=utf-8` but the body is actually
- * GBK-encoded for Chinese text. The OpenAI SDK trusts the header and
- * mangles the bytes, leaving us with corrupt strings that fail to parse.
+ * The dreamfield DeepSeek proxy returns Chinese text GBK-encoded even though
+ * it claims utf-8. When streaming, a multi-byte GBK character can be split
+ * across two chunks, so we MUST decode with a stateful decoder
+ * (`stream: true`) that buffers incomplete byte sequences.
  *
- * Fix: bypass the SDK. Fetch raw bytes, sniff the encoding, decode with the
- * correct one. Try utf-8 first; if the result looks like Mojibake (lots of
- * replacement chars), fall back to gbk.
+ * GBK is a superset of ASCII, so JSON structural characters decode correctly
+ * under GBK — meaning the decoded text is valid JSON we can parse directly.
  */
-function decodeMaybeGbk(bytes: Uint8Array): string {
-  const utf8 = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-  // Heuristic: count replacement characters and Chinese chars
-  const replacementCount = (utf8.match(/�/g) ?? []).length;
-  const chineseCount = (utf8.match(/[一-鿿]/g) ?? []).length;
-  // If we have more replacement chars than Chinese chars, it's almost
-  // certainly mis-decoded. Try gbk.
-  if (replacementCount > 0 && replacementCount > chineseCount / 4) {
-    try {
-      const gbk = new TextDecoder('gbk', { fatal: false }).decode(bytes);
-      return gbk;
-    } catch {
-      return utf8;
-    }
-  }
-  // utf-8 looked clean (e.g. response was English / structured tokens only)
-  return utf8;
-}
-
 export async function POST(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized' }),
+      { status: 401, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+    );
+  }
+  const startTime = Date.now();
   const body: ReflectRequestBody = await request.json();
 
   if (!body.userInput?.trim()) {
@@ -60,23 +55,18 @@ export async function POST(request: NextRequest) {
     recentContext: body.recentContext,
   });
 
-  // Non-streaming because DeepSeek-V4-Flash burns most tokens on
-  // reasoning_content before producing actual content. We pull the whole
-  // response, decode it correctly, then fake-stream to the client.
-  let fullContent = '';
-  let finishReason: string | null = null;
-
+  let upstream: Response;
   try {
-    const upstream = await fetch(UPSTREAM_URL, {
+    upstream = await fetch(UPSTREAM_URL, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${UPSTREAM_KEY}`,
+        Authorization: `Bearer ${UPSTREAM_KEY}`,
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        Accept: 'application/json',
       },
       body: JSON.stringify({
         model: UPSTREAM_MODEL,
-        stream: false,
+        stream: true,
         temperature: 0.7,
         max_tokens: 4000,
         messages: [
@@ -85,93 +75,196 @@ export async function POST(request: NextRequest) {
         ],
       }),
     });
-
-    if (!upstream.ok) {
-      const errText = decodeMaybeGbk(new Uint8Array(await upstream.arrayBuffer()));
-      console.error('[reflect] upstream non-2xx:', upstream.status, errText.slice(0, 500));
-      return new Response(
-        JSON.stringify({ error: `上游 ${upstream.status}: ${errText.slice(0, 300)}` }),
-        { status: 502, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
-      );
-    }
-
-    const buf = new Uint8Array(await upstream.arrayBuffer());
-    const text = decodeMaybeGbk(buf);
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch (e) {
-      console.error('[reflect] JSON.parse failed:', e, '| body preview:', text.slice(0, 500));
-      return new Response(
-        JSON.stringify({ error: '上游返回了无法解析的 JSON: ' + text.slice(0, 200) }),
-        { status: 502, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
-      );
-    }
-
-    type UpstreamChoice = {
-      finish_reason?: string | null;
-      message?: { content?: string };
-    };
-    type UpstreamResponse = { choices?: UpstreamChoice[]; usage?: unknown };
-    const data = parsed as UpstreamResponse;
-    const choice = data.choices?.[0];
-
-    fullContent = choice?.message?.content ?? '';
-    finishReason = choice?.finish_reason ?? null;
-
-    console.log(
-      '[reflect] non-stream done',
-      '| finish=' + finishReason,
-      '| content_len=' + fullContent.length,
-      '| usage=' + JSON.stringify(data.usage)
-    );
   } catch (error) {
-    console.error('[reflect] upstream fetch error:', error);
-    return new Response(
-      JSON.stringify({ error: 'AI 上游调用失败：' + String(error) }),
-      { status: 502, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
-    );
+    console.error('[reflect] upstream connect error:', error);
+    return new Response(JSON.stringify({ error: 'AI 上游连接失败：' + String(error) }), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    });
   }
 
-  if (!fullContent) {
-    return new Response(
-      JSON.stringify({
-        error:
-          'AI 没有返回 content（finish_reason=' +
-          finishReason +
-          '）。模型可能把所有 token 都用在了 reasoning 上，调大 max_tokens 或换非 reasoning 模型。',
-      }),
-      { status: 502, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
-    );
+  if (!upstream.ok || !upstream.body) {
+    const errText = new TextDecoder('utf-8', { fatal: false }).decode(await upstream.arrayBuffer());
+    console.error('[reflect] upstream non-2xx:', upstream.status, errText.slice(0, 500));
+    try {
+      await logAiCall({
+        userId: user.id,
+        mode: 'reflection',
+        tokensIn: 0,
+        tokensOut: 0,
+        latencyMs: Date.now() - startTime,
+      });
+    } catch (e) {
+      console.error('[reflect] failed to log failed call:', e);
+    }
+    return new Response(JSON.stringify({ error: `上游 ${upstream.status}: ${errText.slice(0, 300)}` }), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    });
   }
 
-  // Fake-stream the content out as SSE so the existing client hook works
-  // and the user gets a typewriter effect.
   const encoder = new TextEncoder();
-  const readable = new ReadableStream({
+  // The dreamfield proxy historically returned GBK-encoded bodies for some
+  // upstream models (e.g. older deepseek). Newer models (e.g. glm-5.2) return
+  // proper UTF-8. We can't tell from headers (the proxy always advertises
+  // utf-8), so we decode each raw chunk twice — once as utf-8, once as gbk —
+  // and forward whichever decoding's `content` field looks like valid Chinese
+  // text. Detection runs per-chunk and is locked once we see clear evidence.
+  const utf8Decoder = new TextDecoder('utf-8', { fatal: false });
+  const gbkDecoder = new TextDecoder('gbk', { fatal: false });
+  // null = unknown yet, 'utf-8' / 'gbk' once we've decided.
+  let encodingChoice: 'utf-8' | 'gbk' | null = null;
+
+  /** Lightweight heuristic: count U+FFFD replacement chars vs Chinese chars. */
+  function looksLikeMojibake(text: string): boolean {
+    const replacements = (text.match(/�/g) ?? []).length;
+    if (replacements === 0) return false;
+    const chinese = (text.match(/[一-鿿]/g) ?? []).length;
+    return replacements > Math.max(1, chinese / 4);
+  }
+
+  /** Returns true if text contains the typical GBK-as-UTF-8 mojibake pattern. */
+  function looksLikeGbkMisreadAsUtf8(text: string): boolean {
+    // GBK Chinese bytes start with 0x80-0xFE. When utf-8-decoded, these often
+    // map to characters in U+0080-U+00FF (Latin-1 supplement) or higher BMP
+    // ranges that are rare in real Chinese text — e.g. 閱 (U+95B1), 鎶 (U+93B6).
+    // Real Chinese is concentrated in U+4E00-U+9FFF. If we see lots of CJK
+    // Unified Extension chars (U+3400+) with no chars in the common range,
+    // it's almost certainly GBK misread.
+    const rareCjk = (text.match(/[㐀-䶿龦-鿿-]/g) ?? []).length;
+    const commonCjk = (text.match(/[一-龥]/g) ?? []).length;
+    return rareCjk > 0 && rareCjk > commonCjk;
+  }
+
+  const upstreamReader = upstream.body.getReader();
+
+  const readable = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const CHUNK_SIZE = 6;
-      const DELAY_MS = 18;
+      // Two parallel decode buffers — we'll commit to one after the first
+      // few chunks reveal which is correct.
+      let bufferUtf8 = '';
+      let bufferGbk = '';
+      let sawAnyContent = false;
+      let tokensIn = 0;
+      let tokensOut = 0;
+
+      // Keep-alive ping during the model's reasoning phase so Vercel doesn't
+      // 502 the request on long idle.
+      const keepalive = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(': ping\n\n'));
+        } catch {
+          // controller already closed — ignore
+        }
+      }, 2000);
+
       try {
-        // Use Array.from to iterate by Unicode code points so we don't slice
-        // through a multi-byte character.
-        const chars = Array.from(fullContent);
-        for (let i = 0; i < chars.length; i += CHUNK_SIZE) {
-          const piece = chars.slice(i, i + CHUNK_SIZE).join('');
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ content: piece })}\n\n`)
-          );
-          if (DELAY_MS > 0) {
-            await new Promise((r) => setTimeout(r, DELAY_MS));
+        while (true) {
+          const { done, value } = await upstreamReader.read();
+          if (done) break;
+
+          // Decode the same bytes both ways with stream mode so split
+          // multi-byte chars stay buffered until the next chunk completes them.
+          bufferUtf8 += utf8Decoder.decode(value, { stream: true });
+          bufferGbk += gbkDecoder.decode(value, { stream: true });
+
+          // Lock the encoding choice once we have enough text to inspect.
+          if (encodingChoice === null && (bufferUtf8.length > 80 || bufferGbk.length > 80)) {
+            if (looksLikeMojibake(bufferUtf8) || looksLikeGbkMisreadAsUtf8(bufferUtf8)) {
+              encodingChoice = 'gbk';
+            } else {
+              encodingChoice = 'utf-8';
+            }
+          }
+
+          // While the encoding is still unknown, prefer utf-8 (the modern
+          // expectation) and re-evaluate above.
+          const active = encodingChoice === 'gbk' ? 'gbk' : 'utf-8';
+          const bufferRef = { current: active === 'gbk' ? bufferGbk : bufferUtf8 };
+
+          // SSE events are separated by a blank line (\n\n).
+          const events = bufferRef.current.split('\n\n');
+          const tail = events.pop() ?? '';
+          // Keep the unconsumed tail in BOTH buffers — events we've handled get
+          // dropped from both so we don't double-emit if we flip encoding.
+          const consumedLen = bufferRef.current.length - tail.length;
+          bufferUtf8 = bufferUtf8.slice(consumedLen);
+          bufferGbk = bufferGbk.slice(consumedLen);
+
+          for (const evt of events) {
+            const line = evt.trim();
+            if (!line.startsWith('data:')) continue;
+            const data = line.slice(5).trim();
+            if (data === '[DONE]') continue;
+
+            try {
+              const json = JSON.parse(data);
+              const delta = json.choices?.[0]?.delta;
+              const content: string | undefined = delta?.content;
+              if (content) {
+                sawAnyContent = true;
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
+                );
+              }
+              if (json.usage) {
+                tokensIn = json.usage.prompt_tokens ?? tokensIn;
+                tokensOut = json.usage.completion_tokens ?? tokensOut;
+              }
+            } catch {
+              // partial JSON — ignore
+            }
           }
         }
+
+        // Flush trailing bytes.
+        bufferUtf8 += utf8Decoder.decode();
+        bufferGbk += gbkDecoder.decode();
+
+        if (!sawAnyContent) {
+          // Model thought the whole time and produced no answer content.
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                error:
+                  'AI 思考了很久但没有给出回答内容。请把话说得更具体一点，或稍后再试一次。',
+              })}\n\n`
+            )
+          );
+        }
+
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        clearInterval(keepalive);
+        try {
+          await logAiCall({
+            userId: user.id,
+            mode: 'reflection',
+            tokensIn,
+            tokensOut,
+            latencyMs: Date.now() - startTime,
+          });
+        } catch (e) {
+          console.error('[reflect] failed to log successful call:', e);
+        }
         controller.close();
       } catch (error) {
+        console.error('[reflect] stream error:', error);
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify({ error: String(error) })}\n\n`)
         );
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        clearInterval(keepalive);
+        try {
+          await logAiCall({
+            userId: user.id,
+            mode: 'reflection',
+            tokensIn,
+            tokensOut,
+            latencyMs: Date.now() - startTime,
+          });
+        } catch (e) {
+          console.error('[reflect] failed to log errored call:', e);
+        }
         controller.close();
       }
     },
@@ -180,8 +273,8 @@ export async function POST(request: NextRequest) {
   return new Response(readable, {
     headers: {
       'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
     },
   });
 }

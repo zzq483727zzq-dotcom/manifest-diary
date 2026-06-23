@@ -4,6 +4,9 @@ import { logAiCall } from '@/lib/ai/log';
 import { buildEchoPrompt } from '@/lib/ai/prompts/echo';
 
 export const runtime = 'nodejs';
+// Reasoning model (DeepSeek-V4-Flash) thinks a long time before answering;
+// let Vercel keep the function alive past the default 10s timeout.
+export const maxDuration = 60;
 
 const UPSTREAM_URL = (process.env.DEEPSEEK_BASE_URL || process.env.ANTHROPIC_BASE_URL || 'https://www.dreamfield.top') + '/v1/chat/completions';
 const UPSTREAM_MODEL = process.env.DEEPSEEK_MODEL || process.env.ANTHROPIC_MODEL || 'DeepSeek-V4-Flash';
@@ -22,10 +25,10 @@ function decodeMaybeGbk(bytes: Uint8Array): string {
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponseError('Unauthorized', 401);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { entryId, intention } = await request.json();
-  if (!entryId || !intention) return NextResponseError('entryId and intention are required', 400);
+  if (!entryId || !intention) return NextResponse.json({ error: 'entryId and intention are required' }, { status: 400 });
 
   const prompt = buildEchoPrompt(intention);
   const startTime = Date.now();
@@ -37,10 +40,25 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({ model: UPSTREAM_MODEL, stream: false, max_tokens: 150, temperature: 0.8, messages: [{ role: 'user', content: prompt }] }),
     });
 
+    if (!upstream.ok) {
+      const errText = decodeMaybeGbk(new Uint8Array(await upstream.arrayBuffer()));
+      try {
+        await logAiCall({ userId: user.id, mode: 'manifest_echo', tokensIn: 0, tokensOut: 0, latencyMs: Date.now() - startTime });
+      } catch (e) { console.error('[echo] failed to log failed call:', e); }
+      return NextResponse.json({ error: `上游 ${upstream.status}: ${errText.slice(0, 200)}` }, { status: 502 });
+    }
+
     const buf = new Uint8Array(await upstream.arrayBuffer());
     const text = decodeMaybeGbk(buf);
     const parsed = JSON.parse(text);
     const echo = parsed.choices?.[0]?.message?.content?.trim() ?? '';
+
+    if (!echo) {
+      try {
+        await logAiCall({ userId: user.id, mode: 'manifest_echo', tokensIn: parsed.usage?.prompt_tokens ?? 0, tokensOut: parsed.usage?.completion_tokens ?? 0, latencyMs: Date.now() - startTime });
+      } catch (e) { console.error('[echo] failed to log empty call:', e); }
+      return NextResponse.json({ error: 'AI 返回了空的回响' }, { status: 502 });
+    }
 
     const latencyMs = Date.now() - startTime;
     const tokensIn = parsed.usage?.prompt_tokens ?? 0;
@@ -52,10 +70,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ echo });
   } catch (error) {
     console.error('[echo] upstream error:', error);
-    return NextResponseError('AI 上游调用失败：' + String(error), 502);
+    return NextResponse.json({ error: 'AI 上游调用失败：' + String(error) }, { status: 502 });
   }
-}
-
-function NextResponseError(error: string, status: number) {
-  return new Response(JSON.stringify({ error }), { status, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
 }

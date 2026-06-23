@@ -41,10 +41,32 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({ model: UPSTREAM_MODEL, stream: false, max_tokens: 200, temperature: 0.3, messages: [{ role: 'user', content: prompt }] }),
     });
 
+    if (!upstream.ok) {
+      const errText = decodeMaybeGbk(new Uint8Array(await upstream.arrayBuffer()));
+      console.error('[analyze] upstream non-2xx:', upstream.status, errText.slice(0, 300));
+      try {
+        await logAiCall({ userId: user.id, mode: 'manifest_analysis', tokensIn: 0, tokensOut: 0, latencyMs: Date.now() - startTime });
+      } catch (e) { console.error('[analyze] failed to log failed call:', e); }
+      return NextResponse.json({ error: `上游 ${upstream.status}: ${errText.slice(0, 200)}` }, { status: 502 });
+    }
+
     const buf = new Uint8Array(await upstream.arrayBuffer());
     const text = decodeMaybeGbk(buf);
-    const parsed = JSON.parse(text);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      console.error('[analyze] JSON parse failed:', e, '| body:', text.slice(0, 300));
+      return NextResponse.json({ error: '上游返回了无法解析的数据' }, { status: 502 });
+    }
     const raw = parsed.choices?.[0]?.message?.content?.trim() ?? '';
+
+    if (!raw) {
+      try {
+        await logAiCall({ userId: user.id, mode: 'manifest_analysis', tokensIn: parsed.usage?.prompt_tokens ?? 0, tokensOut: parsed.usage?.completion_tokens ?? 0, latencyMs: Date.now() - startTime });
+      } catch (e) { console.error('[analyze] failed to log empty call:', e); }
+      return NextResponse.json({ error: 'AI 返回了空内容' }, { status: 502 });
+    }
 
     const latencyMs = Date.now() - startTime;
     const tokensIn = parsed.usage?.prompt_tokens ?? 0;
