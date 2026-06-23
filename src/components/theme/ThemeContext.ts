@@ -2,7 +2,7 @@
 
 import { createContext, useContext } from 'react';
 
-export type Theme = 'night' | 'garden' | 'cosmos';
+export type Theme = 'night' | 'cosmos';
 
 interface ThemeContextValue {
   theme: Theme;

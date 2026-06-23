@@ -1,234 +1,202 @@
-/*
- * Healing fonts (思源宋体 / 思源黑体 / LXGW WenKai)
- * Loaded via CSS @import — graceful fallback if CDN fails because every
- * font-family below stacks system fonts after the web font.
- * NOTE: do NOT switch to next/font/google — that was removed in bd680b8.
- */
-@import url("https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600&display=swap");
-
 @import "tailwindcss";
 
 @theme {
-  --color-rose-gold: #FFB6C1;
-  --color-rose-gold-50: #FFF0F3;
-  --color-rose-gold-100: #FFE0E8;
-  --color-rose-gold-200: #FFC1D5;
-  --color-rose-gold-300: #FFB6C1;
-  --color-rose-gold-400: #FF9EB0;
-  --color-rose-gold-500: #FF7A95;
-  --color-rose-gold-600: #E5567A;
-  --color-rose-gold-700: #CC335F;
-  --color-rose-gold-800: #B31A45;
-  --color-rose-gold-900: #991130;
+  /* 暖光金（全站点缀主色）—— 替换原 rose-gold */
+  --color-gold: #d4af37;
+  --color-gold-soft: #f5d77a;
+  --color-gold-bright: #f5d77a;
+  --color-gold-deep: #b8941f;
 
-  /* 治愈字体栈 —— Web font 在前，系统字体兜底 */
-  --font-sans: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB",
-    "Microsoft YaHei", "微软雅黑", system-ui, -apple-system, "Segoe UI", Roboto,
-    sans-serif;
-  --font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC",
+  /* 治愈字体栈 —— 只用系统字体，不引外部 web font */
+  --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "微软雅黑", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Songti SC", "Source Han Serif SC", "Noto Serif SC",
     "STSong", "SimSun", Georgia, "Times New Roman", serif;
 
+  /* 动画 */
   --animate-fade-in: fadeIn 0.6s ease-out forwards;
   --animate-fade-up: fadeUp 0.5s ease-out forwards;
   --animate-breathe: breathe 4s ease-in-out infinite;
-  --animate-glow-pulse: glowPulse 2s ease-in-out infinite;
-  --animate-shimmer: shimmer 2.4s linear infinite;
+  --animate-glow-pulse: glowPulse 2.4s ease-in-out infinite;
+  --animate-shimmer: shimmer 2.6s linear infinite;
+  --animate-gold-sweep: goldSweep 1.2s ease-out forwards;
 
   @keyframes fadeIn {
     0% { opacity: 0; transform: translateY(8px); }
     100% { opacity: 1; transform: translateY(0); }
   }
-
   @keyframes fadeUp {
-    0% { opacity: 0; transform: translateY(12px); }
+    0% { opacity: 0; transform: translateY(16px); }
     100% { opacity: 1; transform: translateY(0); }
   }
-
   @keyframes breathe {
     0%, 100% { transform: scale(1); }
-    50%      { transform: scale(1.02); }
+    50% { transform: scale(1.015); }
   }
-
   @keyframes glowPulse {
     0%, 100% {
-      box-shadow:
-        0 0 12px rgba(244, 114, 182, 0.25),
-        0 0 24px rgba(251, 191, 36, 0.15);
+      box-shadow: 0 0 14px rgba(212,175,55,0.20), 0 0 28px rgba(245,215,122,0.10);
     }
     50% {
-      box-shadow:
-        0 0 22px rgba(244, 114, 182, 0.55),
-        0 0 44px rgba(251, 191, 36, 0.30);
+      box-shadow: 0 0 22px rgba(212,175,55,0.45), 0 0 48px rgba(245,215,122,0.25);
     }
   }
-
   @keyframes shimmer {
-    0%   { background-position: -200% 0; }
+    0% { background-position: -200% 0; }
     100% { background-position: 200% 0; }
+  }
+  @keyframes goldSweep {
+    0% { transform: translateY(100%) scaleY(0.3); opacity: 0; }
+    40% { opacity: 1; }
+    100% { transform: translateY(-120%) scaleY(1.5); opacity: 0; }
   }
 }
 
-:root {
-  /* 夜晚暖光（默认主题） */
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-card: #fefce8;
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --accent: #f59e0b;
-  --accent-rose: #f472b6;
-  --accent-rose-gold: linear-gradient(135deg, #f472b6, #fbbf24);
-  --border: #334155;
-}
-
-[data-theme="garden"] {
-  /* 晨间花园 */
-  --bg-primary: #fefce8;
-  --bg-secondary: #f0fdf4;
-  --bg-card: #ffffff;
-  --text-primary: #1e293b;
-  --text-secondary: #64748b;
-  --accent: #22c55e;
-  --accent-rose: #f472b6;
-  --accent-rose-gold: linear-gradient(135deg, #22c55e, #a3e635);
-  --border: #e2e8f0;
-}
-
-[data-theme="cosmos"] {
-  /* 显化星空 */
-  --bg-primary: #1e1b4b;
-  --bg-secondary: #312e81;
-  --bg-card: #312e81;
-  --text-primary: #e0e7ff;
-  --text-secondary: #a5b4fc;
-  --accent: #f472b6;
-  --accent-rose: #f472b6;
-  --accent-rose-gold: linear-gradient(135deg, #f472b6, #c084fc);
-  --border: #4338ca;
-}
-
-/* 通用深度变量 */
+/* ── 暖夜主题（默认，首页/复盘/历史/登录）── */
+:root,
 [data-theme="night"] {
-  --shadow-soft: 0 4px 24px rgba(0, 0, 0, 0.35);
-  --shadow-glow: 0 0 32px rgba(244, 114, 182, 0.18);
-  --bg-card-glow: rgba(254, 252, 232, 0.05);
+  --bg-primary: radial-gradient(ellipse at 30% 18%, #3a2a1f 0%, #241a13 42%, #15100c 100%);
+  --bg-solid: #15100c;       /* 渐变回退色，用于 body background-color */
+  --bg-card: #1f1812;
+  --bg-card-glow: rgba(245,166,35,0.06);
+  --text-primary: #f5e6d3;
+  --text-secondary: #9b8b75;
+  --border-soft: rgba(245,230,211,0.22);
+  --border-strong: rgba(245,230,211,0.40);
+  --lamp-glow: rgba(245,166,35,0.30);
+  --shadow-soft: 0 4px 24px rgba(0,0,0,0.40);
+  --shadow-glow: 0 0 32px rgba(245,166,35,0.16);
   --noise-opacity: 0.03;
+
+  /* 暖光金（主题变量版） */
+  --gold-gradient: linear-gradient(135deg, #d4af37, #f5d77a, #d4af37);
+  --gold-solid: #d4af37;
+  --gold-soft: rgba(212,175,55,0.15);
+  --gold-bright: #f5d77a;
 }
 
-[data-theme="garden"] {
-  --shadow-soft: 0 2px 16px rgba(34, 197, 94, 0.08);
-  --shadow-glow: 0 0 24px rgba(244, 114, 182, 0.15);
-  --bg-card-glow: rgba(255, 255, 255, 0.6);
-  --noise-opacity: 0;
-}
-
+/* ── 深紫天鹅绒主题（显化页专用）── */
 [data-theme="cosmos"] {
-  --shadow-soft: 0 4px 32px rgba(67, 56, 202, 0.4);
-  --shadow-glow: 0 0 40px rgba(244, 114, 182, 0.3);
-  --bg-card-glow: rgba(49, 46, 129, 0.4);
+  --bg-primary: linear-gradient(160deg, #2d1b3d 0%, #1f1430 60%, #180f28 100%);
+  --bg-solid: #1f1430;
+  --bg-card: rgba(45,27,61,0.55);
+  --bg-card-glow: rgba(212,175,55,0.06);
+  --text-primary: #f5e6d3;
+  --text-secondary: #b8a8c9;
+  --border-soft: rgba(212,175,55,0.20);
+  --border-strong: rgba(212,175,55,0.45);
+  --lamp-glow: rgba(212,175,55,0.18);
+  --shadow-soft: 0 4px 32px rgba(67,56,202,0.40);
+  --shadow-glow: 0 0 40px rgba(212,175,55,0.30);
   --noise-opacity: 0.04;
+
+  --gold-gradient: linear-gradient(135deg, #d4af37, #f5d77a, #d4af37);
+  --gold-solid: #d4af37;
+  --gold-soft: rgba(212,175,55,0.15);
+  --gold-bright: #f5d77a;
 }
 
 /* 顺滑切换 */
-html {
-  transition: background-color 0.4s ease;
-}
-html[data-theme] body {
-  background-color: var(--bg-primary);
+html { transition: background-color 0.4s ease; }
+html[data-theme] body,
+body {
+  background-color: var(--bg-solid);
   color: var(--text-primary);
   transition: background-color 0.4s ease, color 0.4s ease;
-}
-
-/* 默认字体：正文圆体，标题衬线（治愈系基调） */
-body {
   font-family: var(--font-sans);
 }
 
-h1, h2, .font-serif {
-  font-family: var(--font-serif);
-  font-weight: 500;
-  letter-spacing: 0.01em;
+/* 让背景渐变铺满 —— 用一个固定层而非 body 直接渐变（避免卡片遮挡） */
+body {
+  min-height: 100vh;
+  position: relative;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: var(--bg-primary);
+  z-index: -1;
 }
 
-/* 玫瑰金渐变文字工具类 */
-.text-rose-gold {
-  background: var(--accent-rose-gold);
+h1, h2, h3, .font-serif {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* AI 说话用的衬线斜体 */
+.font-ai {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1.8;
+}
+
+/* 元信息：小号 + 大字间距 */
+.text-meta {
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+/* 暖光金渐变文字 */
+.text-gold {
+  background: var(--gold-gradient);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-/* 玫瑰金光晕边框 */
+/* 金色描边光晕（替代旧 glow-border） */
 .glow-border {
   position: relative;
 }
 .glow-border::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: -1px;
   border-radius: inherit;
   padding: 1px;
-  background: var(--accent-rose-gold);
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  background: var(--gold-gradient);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
-  opacity: 0.6;
+  opacity: 0.7;
 }
 
-/* ──────────────────────────────────────────────────────────
- * 动画工具类（不依赖 framer-motion，任何组件可直接用）
- * ────────────────────────────────────────────────────────── */
-
-.animate-fade-in {
-  animation: fadeIn 0.6s ease-out forwards;
+/* 台灯暖光光晕（绝对定位用） */
+.lamp-warmth {
+  position: absolute;
+  background: radial-gradient(circle, var(--lamp-glow) 0%, transparent 65%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
 }
 
-.animate-fade-up {
-  animation: fadeUp 0.5s ease-out forwards;
-  opacity: 0;
-}
-
-.breathe {
-  animation: breathe 4s ease-in-out infinite;
-  will-change: transform;
-}
-
-.glow-pulse {
-  animation: glowPulse 2s ease-in-out infinite;
-}
-
+/* ── 动画工具类 ── */
+.animate-fade-in { animation: fadeIn 0.6s ease-out forwards; }
+.animate-fade-up { animation: fadeUp 0.5s ease-out forwards; opacity: 0; }
+.breathe { animation: breathe 4s ease-in-out infinite; will-change: transform; }
+.glow-pulse { animation: glowPulse 2.4s ease-in-out infinite; }
 .shimmer {
-  position: relative;
-  background-image: linear-gradient(
-    100deg,
-    transparent 35%,
-    rgba(255, 255, 255, 0.35) 50%,
-    transparent 65%
-  );
+  background-image: linear-gradient(100deg, transparent 35%, rgba(245,215,122,0.35) 50%, transparent 65%);
   background-size: 200% 100%;
   background-repeat: no-repeat;
-  animation: shimmer 2.4s linear infinite;
-  background-blend-mode: overlay;
+  animation: shimmer 2.6s linear infinite;
 }
-
 .ceremonial-tap {
-  transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1),
-              box-shadow 220ms ease;
+  transition: transform 180ms cubic-bezier(0.4,0,0.2,1), box-shadow 220ms ease;
   will-change: transform;
 }
-.ceremonial-tap:active {
-  transform: scale(0.95);
-}
+.ceremonial-tap:active { transform: scale(0.95); }
 
-/* 尊重「减少动画」用户偏好 */
+/* 尊重减少动画偏好 */
 @media (prefers-reduced-motion: reduce) {
-  .animate-fade-in,
-  .animate-fade-up,
-  .breathe,
-  .glow-pulse,
-  .shimmer {
+  .animate-fade-in, .animate-fade-up, .breathe, .glow-pulse, .shimmer {
     animation: none !important;
   }
   .animate-fade-up { opacity: 1; }

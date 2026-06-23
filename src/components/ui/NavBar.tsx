@@ -16,12 +16,10 @@ export function NavBar({ userEmail }: NavBarProps) {
   const router = useRouter();
   const { setTheme } = useTheme();
 
-  // 路由感知的主题切换
+  // 路由感知的主题切换：显化页 cosmos，其余 night
   useEffect(() => {
     if (pathname.startsWith('/manifest')) {
       setTheme('cosmos');
-    } else if (pathname.startsWith('/reflect')) {
-      setTheme('night');
     } else {
       setTheme(autoTheme());
     }
@@ -50,11 +48,14 @@ export function NavBar({ userEmail }: NavBarProps) {
   return (
     <nav
       className="border-b backdrop-blur-md sticky top-0 z-30"
-      style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg-primary)' }}
+      style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-solid)' }}
     >
       <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-rose-gold font-medium tracking-wider text-sm">
+          <span
+            className="text-gold font-medium tracking-wider text-sm"
+            style={{ fontFamily: 'var(--font-serif)' }}
+          >
             ✦ MANIFEST DIARY
           </span>
         </div>

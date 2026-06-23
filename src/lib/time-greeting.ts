@@ -1,38 +1,36 @@
-/**
- * 四档时间系统：白天复盘不再强行变黑。
- *  06:00–11:00 → morning   晨间花园
- *  11:00–18:00 → day       白天柔和花园
- *  18:00–21:00 → evening   黄昏过渡
- *  21:00–06:00 → night     深夜暖光
- */
-export type TimeOfDay = 'morning' | 'day' | 'evening' | 'night';
+export type TimeOfDay = "morning" | "noon" | "afternoon" | "evening";
 
+/** 返回真实当前时间所属时段 */
 export function getTimeOfDay(now: Date = new Date()): TimeOfDay {
   const h = now.getHours();
-  if (h >= 6 && h < 11) return 'morning';
-  if (h >= 11 && h < 18) return 'day';
-  if (h >= 18 && h < 21) return 'evening';
-  return 'night';
+  if (h >= 6 && h < 11) return "morning";
+  if (h >= 11 && h < 14) return "noon";
+  if (h >= 14 && h < 18) return "afternoon";
+  return "evening"; // 18-6
 }
 
-export function getGreeting(now: Date = new Date()): string {
-  switch (getTimeOfDay(now)) {
-    case 'morning':
-      return '早安';
-    case 'day':
-      return '午后好';
-    case 'evening':
-      return '黄昏好';
-    case 'night':
-      return '夜深了';
-  }
+const GREETINGS: Record<TimeOfDay, string> = {
+  morning: "早安",
+  noon: "午好",
+  afternoon: "下午好",
+  evening: "晚上好",
+};
+
+/** 中文问候语 */
+export function greetingText(now: Date = new Date()): string {
+  return GREETINGS[getTimeOfDay(now)];
 }
 
-/**
- * 将四档时间映射到实际主题。
- * evening（18–21）归入 garden，与 autoTheme「06:00–21:00 garden」保持一致；
- * 深夜 21:00–06:00 归入 night。
- */
-export function themeForTime(t: TimeOfDay): 'garden' | 'night' {
-  return t === 'night' ? 'night' : 'garden';
+/** 复盘页副标题：深夜更轻柔，白天更明朗 */
+export function reflectionSubtitle(now: Date = new Date()): string {
+  const tod = getTimeOfDay(now);
+  if (tod === "evening") return "说也行，写也行——它会接住你";
+  if (tod === "morning") return "新的一天，把昨晚没倒完的继续说";
+  return "把现在的心绪倒在这里，不用整齐";
+}
+
+/** 主题：白天/夜晚都用 night 暖底（按 spec 不做昼夜切换底色），
+ *  仅返回主题名供 ThemeProvider 使用。cosmos 由显化页路由层覆盖。 */
+export function themeForTime(_tod: TimeOfDay): "night" {
+  return "night";
 }

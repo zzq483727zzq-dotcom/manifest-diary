@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { ThemeContext, type Theme } from './ThemeContext';
-import { getTimeOfDay, themeForTime } from '@/lib/time-greeting';
 
 interface ThemeProviderProps {
   defaultTheme?: Theme;
@@ -24,11 +23,9 @@ export function ThemeProvider({ defaultTheme = 'night', children }: ThemeProvide
 }
 
 /**
- * 根据当前时间返回默认主题：
- * - 06:00–21:00 → garden（晨间花园 / 白天 / 黄昏）
- * - 21:00–06:00 → night（深夜暖光）
- * 显化页 cosmos 主题由路由层覆盖，不受此函数影响。
+ * 自动主题：按 spec 不做昼夜底色切换，统一返回 night 暖底。
+ * cosmos 由显化页路由层覆盖，不受此函数影响。
  */
-export function autoTheme(now: Date = new Date()): Theme {
-  return themeForTime(getTimeOfDay(now));
+export function autoTheme(_now: Date = new Date()): Theme {
+  return 'night';
 }
