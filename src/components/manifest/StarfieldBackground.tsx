@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef } from "react";
 
-interface Star { x: number; y: number; size: number; opacity: number; speed: number; }
+interface Star { x: number; y: number; size: number; opacity: number; speed: number; glowRadius: number; }
 
 export function StarfieldBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -16,25 +16,31 @@ export function StarfieldBackground() {
     const STAR_COUNT = 120;
 
     function resize() {
-      if (!canvas) return;
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      canvas!.width = window.innerWidth;
+      canvas!.height = window.innerHeight;
     }
 
     function initStars() {
       stars.length = 0;
       for (let i = 0; i < STAR_COUNT; i++) {
+        const size = Math.random() * 2 + 0.5;
         stars.push({
-          x: Math.random() * (canvas?.width ?? 800),
-          y: Math.random() * (canvas?.height ?? 600),
-          size: Math.random() * 2 + 0.5,
+          x: Math.random() * canvas!.width,
+          y: Math.random() * canvas!.height,
+          size,
           opacity: Math.random() * 0.8 + 0.2,
           speed: Math.random() * 0.005 + 0.002,
+          glowRadius: size * 3,
         });
       }
     }
 
-    let animationId: number;
+    function handleResize() {
+      resize();
+      initStars();
+    }
+
+    let animationId = 0;
     let time = 0;
 
     function animate() {
@@ -51,13 +57,11 @@ export function StarfieldBackground() {
         ctx.fillStyle = `rgba(255, 220, 200, ${opacity})`;
         ctx.fill();
 
+        // Bright stars get a simple semi-transparent halo instead of a per-frame gradient.
         if (star.size > 1.5) {
           ctx.beginPath();
-          ctx.arc(star.x, star.y, star.size * 3, 0, Math.PI * 2);
-          const gradient = ctx.createRadialGradient(star.x, star.y, 0, star.x, star.y, star.size * 3);
-          gradient.addColorStop(0, `rgba(255, 182, 193, ${opacity * 0.3})`);
-          gradient.addColorStop(1, "rgba(255, 182, 193, 0)");
-          ctx.fillStyle = gradient;
+          ctx.arc(star.x, star.y, star.glowRadius, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 182, 193, ${opacity * 0.12})`;
           ctx.fill();
         }
       }
@@ -67,13 +71,20 @@ export function StarfieldBackground() {
     resize();
     initStars();
     animate();
-    window.addEventListener("resize", () => { resize(); initStars(); });
+    window.addEventListener("resize", handleResize);
 
     return () => {
       cancelAnimationFrame(animationId);
-      window.removeEventListener("resize", resize);
+      window.removeEventListener("resize", handleResize);
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none" style={{ zIndex: 0 }} aria-hidden="true" />;
+  return (
+    <canvas
+      ref={canvasRef}
+      className="fixed inset-0 pointer-events-none"
+      style={{ zIndex: 0 }}
+      aria-hidden="true"
+    />
+  );
 }

@@ -7,6 +7,7 @@ import { IntentionInput } from "@/components/manifest/IntentionInput";
 import { EchoBubble } from "@/components/manifest/EchoBubble";
 import { KeywordTags } from "@/components/manifest/KeywordTags";
 import { ManifestCard } from "@/components/manifest/ManifestCard";
+import { computeEntryDate, APP_TIMEZONE } from "@/lib/date";
 import type { ManifestCategory, ManifestEntry } from "@/types/manifest";
 
 export default function ManifestPage() {
@@ -18,6 +19,7 @@ export default function ManifestPage() {
   const [insight, setInsight] = useState<string | null>(null);
   const [todayEntries, setTodayEntries] = useState<ManifestEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = useCallback(async () => {
     if (!intention.trim() || !category || isProcessing) return;
@@ -25,50 +27,90 @@ export default function ManifestPage() {
     setEcho(null);
     setKeywords([]);
     setInsight(null);
+    setError(null);
+
+    let echoOk = false;
 
     try {
+      // 1. Create entry (critical — must succeed)
       const createRes = await fetch("/api/manifest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ intention, category }),
       });
+      if (!createRes.ok) {
+        const body = await createRes.json().catch(() => ({}));
+        throw new Error(body.error ?? "创建失败");
+      }
       const createData = await createRes.json();
-      const entryId = createData.entry.id;
+      const entryId: string = createData.entry.id;
 
-      const echoRes = await fetch("/api/ai/echo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entryId, intention }),
-      });
-      const echoData = await echoRes.json();
-      setEcho(echoData.echo);
+      // 2. Echo (best-effort, independent of analyze)
+      try {
+        const echoRes = await fetch("/api/ai/echo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ entryId, intention }),
+        });
+        if (echoRes.ok) {
+          const echoData = await echoRes.json();
+          setEcho(echoData.echo);
+          echoOk = true;
+        } else {
+          const body = await echoRes.json().catch(() => ({}));
+          setError(`AI 回响生成失败：${body.error ?? echoRes.status}`);
+        }
+      } catch (e) {
+        setError(`AI 回响生成失败：${String(e)}`);
+      }
 
-      const analyzeRes = await fetch("/api/ai/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entryId, intention }),
-      });
-      const analyzeData = await analyzeRes.json();
-      setKeywords(analyzeData.keywords ?? []);
-      setInsight(analyzeData.insight ?? null);
+      // 3. Analyze (best-effort, independent of echo)
+      try {
+        const analyzeRes = await fetch("/api/ai/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ entryId, intention }),
+        });
+        if (analyzeRes.ok) {
+          const analyzeData = await analyzeRes.json();
+          setKeywords(analyzeData.keywords ?? []);
+          setInsight(analyzeData.insight ?? null);
+        } else if (!echoOk) {
+          // only surface analyze error if echo already failed
+          const body = await analyzeRes.json().catch(() => ({}));
+          setError((prev) => prev ?? `关键词分析失败：${body.error ?? analyzeRes.status}`);
+        }
+      } catch {
+        if (!echoOk) setError((prev) => prev ?? "关键词分析失败");
+      }
 
-      const today = new Date().toISOString().split("T")[0];
-      const listRes = await fetch(`/api/manifest?date=${today}`);
-      const listData = await listRes.json();
-      setTodayEntries(listData.entries ?? []);
+      // 4. Refresh history (non-critical)
+      try {
+        const today = computeEntryDate(new Date(), APP_TIMEZONE);
+        const listRes = await fetch(`/api/manifest?date=${today}`);
+        if (listRes.ok) {
+          const listData = await listRes.json();
+          setTodayEntries(listData.entries ?? []);
+        }
+      } catch {
+        /* non-critical */
+      }
 
-      setIntention("");
-      setCategory(null);
+      // Clear form only on full success (echo produced)
+      if (echoOk) {
+        setIntention("");
+        setCategory(null);
+      }
     } catch (err) {
       console.error("Manifest submission failed:", err);
-      setEcho("星尘暂时迷路了……请再试一次 ✨");
+      setError(err instanceof Error ? err.message : "提交失败，请稍后再试");
     } finally {
       setIsProcessing(false);
     }
   }, [intention, category, isProcessing]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#0f0a2e] via-[#1a1145] to-[#0d0820] text-white relative overflow-hidden">
+    <div className="relative overflow-hidden" style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}>
       <StarfieldBackground />
       <div className="relative z-10 max-w-2xl mx-auto px-4 py-8 space-y-8">
         <header className="text-center space-y-2">
@@ -88,6 +130,12 @@ export default function ManifestPage() {
             isProcessing={isProcessing}
           />
         </section>
+
+        {error && (
+          <div className="mx-auto max-w-md p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm">
+            {error}
+          </div>
+        )}
 
         {(echo || isProcessing) && (
           <section className="space-y-4">

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { ManifestCategory } from "@/types/manifest";
+import { computeEntryDate, APP_TIMEZONE } from "@/lib/date";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -35,15 +36,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `category must be one of: ${validCategories.join(", ")}` }, { status: 400 });
   }
 
-  const now = new Date();
-  let entryDate: string;
-  if (now.getHours() < 4) {
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-    entryDate = yesterday.toISOString().split("T")[0];
-  } else {
-    entryDate = now.toISOString().split("T")[0];
-  }
+  const entryDate = computeEntryDate(new Date(), APP_TIMEZONE);
 
   const { data, error } = await supabase
     .from("manifest_entries")

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { computeEntryDate, APP_TIMEZONE } from "@/lib/date";
 import type {
   ManifestEntry,
   ManifestCreateInput,
@@ -6,13 +7,7 @@ import type {
 } from "@/types/manifest";
 
 function getEntryDate(): string {
-  const now = new Date();
-  if (now.getHours() < 4) {
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-    return yesterday.toISOString().split("T")[0];
-  }
-  return now.toISOString().split("T")[0];
+  return computeEntryDate(new Date(), APP_TIMEZONE);
 }
 
 export async function createManifestEntry(

@@ -102,7 +102,18 @@ export function useVoiceRecorder(lang = 'zh-CN'): VoiceRecorderState & VoiceReco
 
     rec.onerror = (event: Event) => {
       const err = (event as unknown as { error?: string }).error || 'unknown';
-      if (err !== 'no-speech' && err !== 'aborted') {
+      // Treat permission/hardware errors as fatal — don't auto-restart.
+      const isFatal = err === 'not-allowed' || err === 'service-not-allowed' || err === 'audio-capture';
+      if (isFatal) {
+        isManuallyStopped.current = true;
+        setError(
+          err === 'not-allowed'
+            ? '麦克风权限被拒绝'
+            : err === 'audio-capture'
+              ? '没有可用的麦克风'
+              : '语音服务不可用'
+        );
+      } else if (err !== 'no-speech' && err !== 'aborted') {
         setError(`录音错误：${err}`);
       }
     };
