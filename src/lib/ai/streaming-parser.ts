@@ -25,40 +25,96 @@ export class StreamingReflectionParser {
   }
 
   private recompute(): void {
+    // Find JSON start: either an explicit ```json fence, or a \n\n{ separator.
+    // Using the literal `{` would be wrong — empathy text can contain `{`.
     const fenceIdx = this.buffer.indexOf('```json');
     let jsonStart = -1;
 
     if (fenceIdx !== -1) {
-      jsonStart = this.buffer.indexOf('\n', fenceIdx) + 1;
+      const afterFenceNewline = this.buffer.indexOf('\n', fenceIdx);
+      jsonStart = afterFenceNewline === -1 ? fenceIdx + 7 : afterFenceNewline + 1;
       this.state.empathy = this.buffer.slice(0, fenceIdx).trim();
     } else {
-      const firstBrace = this.buffer.indexOf('{');
-      if (firstBrace === -1) {
+      const separatorIdx = this.buffer.indexOf('\n\n{');
+      if (separatorIdx === -1) {
         this.state.empathy = this.buffer.trim();
         this.state.structured = null;
         return;
       }
-      jsonStart = firstBrace;
-      this.state.empathy = this.buffer.slice(0, firstBrace).trim();
+      jsonStart = separatorIdx + 2; // skip the two \n, land on '{'
+      this.state.empathy = this.buffer.slice(0, separatorIdx).trim();
     }
 
     const remaining = this.buffer.slice(jsonStart);
-    const closingFence = remaining.indexOf('```');
-    const candidate = closingFence !== -1
-      ? remaining.slice(0, closingFence).trim()
-      : remaining.trim();
+    const candidate = extractJsonCandidate(remaining);
+    if (!candidate) {
+      this.state.structured = null;
+      return;
+    }
 
     try {
       const parsed = JSON.parse(candidate);
       if (
+        parsed &&
+        typeof parsed === 'object' &&
         Array.isArray(parsed.highlights) &&
         Array.isArray(parsed.cognitive_bugs) &&
         Array.isArray(parsed.tomorrow_script)
       ) {
         this.state.structured = parsed as ReflectionStructured;
+      } else {
+        this.state.structured = null;
       }
     } catch {
       this.state.structured = null;
     }
   }
+}
+
+/**
+ * Pull out a balanced `{ ... }` JSON object from text that may have a closing
+ * ``` fence or other trailing characters after the JSON. Mirrors the brace-
+ * matching logic in parse-response.ts's extractBareJSON, but for an already-
+ * trimmed candidate starting near `{`.
+ */
+function extractJsonCandidate(text: string): string | null {
+  const firstBrace = text.indexOf('{');
+  if (firstBrace === -1) return null;
+
+  // Walk the string tracking string-literal state so braces inside strings
+  // don't throw the depth counter off.
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = firstBrace; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (inString) {
+      if (ch === '\\') {
+        escape = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === '{') {
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        return text.slice(firstBrace, i + 1);
+      }
+    }
+  }
+
+  // No matching close yet — JSON not complete.
+  return null;
 }
