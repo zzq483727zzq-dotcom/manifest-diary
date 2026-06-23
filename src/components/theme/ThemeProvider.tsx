@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { ThemeContext, type Theme } from './ThemeContext';
+import { getTimeOfDay, themeForTime } from '@/lib/time-greeting';
 
 interface ThemeProviderProps {
   defaultTheme?: Theme;
@@ -23,13 +24,11 @@ export function ThemeProvider({ defaultTheme = 'night', children }: ThemeProvide
 }
 
 /**
- * 根据当前小时返回默认主题：
- * - 06:00-18:00 → garden（晨间花园）
- * - 18:00-06:00 → night（夜晚暖光）
- * 显化/宇宙主题由路由层覆盖。
+ * 根据当前时间返回默认主题：
+ * - 06:00–21:00 → garden（晨间花园 / 白天 / 黄昏）
+ * - 21:00–06:00 → night（深夜暖光）
+ * 显化页 cosmos 主题由路由层覆盖，不受此函数影响。
  */
 export function autoTheme(now: Date = new Date()): Theme {
-  const h = now.getHours();
-  if (h >= 6 && h < 18) return 'garden';
-  return 'night';
+  return themeForTime(getTimeOfDay(now));
 }

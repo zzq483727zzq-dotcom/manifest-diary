@@ -1,3 +1,11 @@
+/*
+ * Healing fonts (思源宋体 / 思源黑体 / LXGW WenKai)
+ * Loaded via CSS @import — graceful fallback if CDN fails because every
+ * font-family below stacks system fonts after the web font.
+ * NOTE: do NOT switch to next/font/google — that was removed in bd680b8.
+ */
+@import url("https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600&display=swap");
+
 @import "tailwindcss";
 
 @theme {
@@ -13,11 +21,50 @@
   --color-rose-gold-800: #B31A45;
   --color-rose-gold-900: #991130;
 
+  /* 治愈字体栈 —— Web font 在前，系统字体兜底 */
+  --font-sans: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "微软雅黑", system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+  --font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC",
+    "STSong", "SimSun", Georgia, "Times New Roman", serif;
+
   --animate-fade-in: fadeIn 0.6s ease-out forwards;
+  --animate-fade-up: fadeUp 0.5s ease-out forwards;
+  --animate-breathe: breathe 4s ease-in-out infinite;
+  --animate-glow-pulse: glowPulse 2s ease-in-out infinite;
+  --animate-shimmer: shimmer 2.4s linear infinite;
 
   @keyframes fadeIn {
     0% { opacity: 0; transform: translateY(8px); }
     100% { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeUp {
+    0% { opacity: 0; transform: translateY(12px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.02); }
+  }
+
+  @keyframes glowPulse {
+    0%, 100% {
+      box-shadow:
+        0 0 12px rgba(244, 114, 182, 0.25),
+        0 0 24px rgba(251, 191, 36, 0.15);
+    }
+    50% {
+      box-shadow:
+        0 0 22px rgba(244, 114, 182, 0.55),
+        0 0 44px rgba(251, 191, 36, 0.30);
+    }
+  }
+
+  @keyframes shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
   }
 }
 
@@ -92,6 +139,17 @@ html[data-theme] body {
   transition: background-color 0.4s ease, color 0.4s ease;
 }
 
+/* 默认字体：正文圆体，标题衬线（治愈系基调） */
+body {
+  font-family: var(--font-sans);
+}
+
+h1, h2, .font-serif {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
 /* 玫瑰金渐变文字工具类 */
 .text-rose-gold {
   background: var(--accent-rose-gold);
@@ -118,3 +176,65 @@ html[data-theme] body {
   pointer-events: none;
   opacity: 0.6;
 }
+
+/* ──────────────────────────────────────────────────────────
+ * 动画工具类（不依赖 framer-motion，任何组件可直接用）
+ * ────────────────────────────────────────────────────────── */
+
+.animate-fade-in {
+  animation: fadeIn 0.6s ease-out forwards;
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.5s ease-out forwards;
+  opacity: 0;
+}
+
+.breathe {
+  animation: breathe 4s ease-in-out infinite;
+  will-change: transform;
+}
+
+.glow-pulse {
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+.shimmer {
+  position: relative;
+  background-image: linear-gradient(
+    100deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 65%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: shimmer 2.4s linear infinite;
+  background-blend-mode: overlay;
+}
+
+.ceremonial-tap {
+  transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 220ms ease;
+  will-change: transform;
+}
+.ceremonial-tap:active {
+  transform: scale(0.95);
+}
+
+/* 尊重「减少动画」用户偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-fade-up,
+  .breathe,
+  .glow-pulse,
+  .shimmer {
+    animation: none !important;
+  }
+  .animate-fade-up { opacity: 1; }
+  .ceremonial-tap { transition: none; }
+}
+
+/* 移动端滚动条隐藏 */
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
