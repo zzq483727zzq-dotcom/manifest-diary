@@ -1,14 +1,17 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { createBrowserClient } from "@/lib/supabase/browser";
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+import { createBrowserClient } from '@/lib/supabase/browser';
 
 export function AuthForm() {
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [pwdFocused, setPwdFocused] = useState(false);
 
   const supabase = createBrowserClient();
 
@@ -18,88 +21,165 @@ export function AuthForm() {
     setMessage(null);
 
     if (isLogin) {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) {
-        setMessage(error.message);
-      } else {
-        window.location.href = "/";
-      }
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) setMessage(error.message);
+      else window.location.href = '/';
     } else {
       const { error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
       });
-      if (error) {
-        setMessage(error.message);
-      } else {
-        setMessage("注册成功！请检查邮箱确认链接。");
-      }
+      if (error) setMessage(error.message);
+      else setMessage('注册成功，请检查邮箱确认链接');
     }
-
     setLoading(false);
   };
 
   return (
-    <div className="w-full max-w-sm mx-auto">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <h2 className="text-xl font-light text-center mb-2">
-          {isLogin ? "欢迎回来 ✨" : "开始你的显化之旅"}
-        </h2>
+    <div className="w-full max-w-sm mx-auto animate-fade-in">
+      {/* 品牌标题区 */}
+      <div className="text-center mb-12">
+        <div
+          className="font-serif text-xs tracking-[0.4em] mb-3 text-gold"
+          style={{ fontWeight: 500 }}
+        >
+          ✦ MANIFEST
+        </div>
+        <h1
+          className="font-serif text-2xl font-light"
+          style={{ color: 'var(--text-primary)', letterSpacing: '0.08em' }}
+        >
+          {isLogin ? '欢迎回来' : '开始你的显化之旅'}
+        </h1>
+        <p
+          className="mt-3 text-xs"
+          style={{ color: 'var(--text-secondary)', letterSpacing: '0.1em' }}
+        >
+          {isLogin ? '让我们继续记录你的内在' : '愿这里成为你内心的回响'}
+        </p>
+      </div>
 
-        <input
-          type="email"
-          placeholder="邮箱"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          className="px-4 py-3 rounded-lg bg-white/10 border border-white/20
-                     placeholder:text-white/40 text-white focus:outline-none
-                     focus:border-amber-400/50 transition-colors"
-        />
+      <form onSubmit={handleSubmit} className="flex flex-col gap-8">
+        {/* 邮箱：纯下划线输入 */}
+        <div>
+          <label
+            className="block text-[10px] tracking-[0.25em] mb-2"
+            style={{
+              color: emailFocused ? 'var(--gold-bright)' : 'var(--text-secondary)',
+              transition: 'color 0.3s',
+            }}
+          >
+            邮箱
+          </label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onFocus={() => setEmailFocused(true)}
+            onBlur={() => setEmailFocused(false)}
+            required
+            autoComplete="email"
+            className="w-full bg-transparent outline-none pb-2"
+            style={{
+              color: 'var(--text-primary)',
+              borderBottom: `1px solid ${emailFocused ? 'var(--gold-solid)' : 'var(--border-soft)'}`,
+              transition: 'border-color 0.3s',
+              fontSize: '0.95rem',
+              letterSpacing: '0.04em',
+            }}
+          />
+        </div>
 
-        <input
-          type="password"
-          placeholder="密码"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          minLength={6}
-          className="px-4 py-3 rounded-lg bg-white/10 border border-white/20
-                     placeholder:text-white/40 text-white focus:outline-none
-                     focus:border-amber-400/50 transition-colors"
-        />
+        <div>
+          <label
+            className="block text-[10px] tracking-[0.25em] mb-2"
+            style={{
+              color: pwdFocused ? 'var(--gold-bright)' : 'var(--text-secondary)',
+              transition: 'color 0.3s',
+            }}
+          >
+            密码
+          </label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onFocus={() => setPwdFocused(true)}
+            onBlur={() => setPwdFocused(false)}
+            required
+            minLength={6}
+            autoComplete={isLogin ? 'current-password' : 'new-password'}
+            className="w-full bg-transparent outline-none pb-2"
+            style={{
+              color: 'var(--text-primary)',
+              borderBottom: `1px solid ${pwdFocused ? 'var(--gold-solid)' : 'var(--border-soft)'}`,
+              transition: 'border-color 0.3s',
+              fontSize: '0.95rem',
+              letterSpacing: '0.04em',
+            }}
+          />
+        </div>
 
-        <button
+        {/* 金色仪式按钮 */}
+        <motion.button
           type="submit"
           disabled={loading}
-          className="px-4 py-3 rounded-lg bg-gradient-to-r from-amber-400 to-pink-400
-                     text-slate-900 font-medium hover:opacity-90 transition-opacity
-                     disabled:opacity-50"
+          whileHover={{ y: -1.5 }}
+          whileTap={{ scale: 0.97 }}
+          className="ceremonial-tap relative w-full py-3.5 mt-2 rounded-full font-serif"
+          style={{
+            background: 'var(--gold-gradient)',
+            color: '#1a120b',
+            letterSpacing: '0.4em',
+            fontSize: '0.9rem',
+            opacity: loading ? 0.6 : 1,
+            cursor: loading ? 'not-allowed' : 'pointer',
+            boxShadow: loading
+              ? 'none'
+              : '0 0 24px rgba(212,175,55,0.25), 0 4px 14px rgba(212,175,55,0.15)',
+            transition: 'box-shadow 0.3s, opacity 0.3s',
+          }}
         >
-          {loading ? "..." : isLogin ? "登录" : "注册"}
-        </button>
+          {loading ? '...' : isLogin ? '进 入' : '开 始'}
+        </motion.button>
 
+        {/* 错误/成功消息 */}
         {message && (
-          <p className="text-sm text-center text-amber-300">{message}</p>
+          <motion.p
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center text-xs"
+            style={{ color: 'var(--gold-bright)', letterSpacing: '0.05em' }}
+          >
+            {message}
+          </motion.p>
         )}
 
+        {/* 切换登录/注册 */}
         <button
           type="button"
           onClick={() => {
             setIsLogin(!isLogin);
             setMessage(null);
           }}
-          className="text-sm text-white/50 hover:text-white/70 transition-colors text-center"
+          className="mx-auto text-xs hover:opacity-80 transition-opacity"
+          style={{
+            color: 'var(--text-secondary)',
+            letterSpacing: '0.15em',
+          }}
         >
-          {isLogin ? "没有账号？注册" : "已有账号？登录"}
+          {isLogin ? '还没有账号？  注 册' : '已有账号？  登 录'}
         </button>
       </form>
+
+      {/* 底部诗意小字 */}
+      <p
+        className="mt-16 text-center text-[10px] font-serif italic"
+        style={{ color: 'var(--text-secondary)', letterSpacing: '0.1em', opacity: 0.6 }}
+      >
+        在这里，每一句都会被温柔接住
+      </p>
     </div>
   );
 }
