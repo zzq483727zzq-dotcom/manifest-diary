@@ -77,23 +77,32 @@ export function CalendarGrid({
       <header className="flex items-center justify-between">
         <Link
           href={`/history?year=${prevMonth.y}&month=${prevMonth.m}`}
-          className="text-sm px-3 py-1.5 rounded-lg transition-colors"
+          className="text-sm px-3 py-1.5 rounded-lg transition-colors ceremonial-tap"
           style={{
             color: "var(--text-secondary)",
-            background: "var(--bg-secondary)",
+            background: "var(--bg-card-glow)",
+            border: "1px solid var(--border-soft)",
           }}
         >
           ← {prevMonth.y}年{prevMonth.m}月
         </Link>
-        <h2 className="text-lg font-light" style={{ color: "var(--text-primary)" }}>
+        <h2
+          className="text-lg font-light"
+          style={{
+            color: "var(--text-primary)",
+            fontFamily: "var(--font-serif)",
+            letterSpacing: "0.06em",
+          }}
+        >
           {year} · {month}月
         </h2>
         <Link
           href={`/history?year=${nextMonth.y}&month=${nextMonth.m}`}
-          className="text-sm px-3 py-1.5 rounded-lg transition-colors"
+          className="text-sm px-3 py-1.5 rounded-lg transition-colors ceremonial-tap"
           style={{
             color: "var(--text-secondary)",
-            background: "var(--bg-secondary)",
+            background: "var(--bg-card-glow)",
+            border: "1px solid var(--border-soft)",
           }}
         >
           {nextMonth.y}年{nextMonth.m}月 →
@@ -129,14 +138,14 @@ export function CalendarGrid({
         <span className="flex items-center gap-1.5">
           <span
             className="w-1.5 h-1.5 rounded-full"
-            style={{ background: "#fbbf24" }}
+            style={{ background: "var(--gold-bright)" }}
           />{" "}
           复盘
         </span>
         <span className="flex items-center gap-1.5">
           <span
             className="w-1.5 h-1.5 rounded-full"
-            style={{ background: "#f472b6" }}
+            style={{ background: "var(--gold-solid)" }}
           />{" "}
           显化
         </span>
