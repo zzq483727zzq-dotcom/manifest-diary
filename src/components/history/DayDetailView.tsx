@@ -25,7 +25,11 @@ export function DayDetailView({ detail }: DayDetailViewProps) {
       {detail.journalEntries.map((j) => {
         const struct = (j.ai_structured ?? {}) as ReflectionStructured;
         return (
-          <article key={j.id} className="space-y-4 p-5 md:p-6 rounded-2xl" style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
+          <article
+            key={j.id}
+            className="space-y-4 p-5 md:p-6 rounded-2xl glow-border"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border-soft)" }}
+          >
             <header className="flex items-center justify-between text-xs" style={{ color: "var(--text-secondary)" }}>
               <span>🌙 复盘 · {formatTime(j.created_at)}</span>
             </header>
@@ -33,13 +37,21 @@ export function DayDetailView({ detail }: DayDetailViewProps) {
               <p>{j.raw_input}</p>
             </div>
             {j.ai_response && (
-              <div className="p-4 rounded-xl" style={{ background: "#fefce8", color: "#1e293b" }}>
-                <p className="text-sm leading-relaxed">{j.ai_response}</p>
+              <div
+                className="p-4 rounded-xl"
+                style={{ background: "var(--bg-card-glow)", border: "1px solid var(--border-soft)" }}
+              >
+                <p
+                  className="font-ai text-sm leading-relaxed"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  {j.ai_response}
+                </p>
               </div>
             )}
             {struct.highlights && struct.highlights.length > 0 && (
               <section>
-                <h3 className="text-xs uppercase tracking-wider mb-2" style={{ color: "#c9a96e" }}>✨ 今日高光</h3>
+                <h3 className="text-xs uppercase tracking-wider mb-2" style={{ color: "var(--gold-bright)" }}>✨ 今日高光</h3>
                 <ul className="space-y-2">
                   {struct.highlights.map((h, i) => (
                     <li key={i} className="text-sm" style={{ color: "var(--text-primary)" }}>
@@ -52,7 +64,7 @@ export function DayDetailView({ detail }: DayDetailViewProps) {
             )}
             {struct.cognitive_bugs && struct.cognitive_bugs.length > 0 && (
               <section>
-                <h3 className="text-xs uppercase tracking-wider mb-2" style={{ color: "#d4956a" }}>🔍 心理 Bug</h3>
+                <h3 className="text-xs uppercase tracking-wider mb-2" style={{ color: "var(--gold-bright)" }}>🔍 心理 Bug</h3>
                 <ul className="space-y-3">
                   {struct.cognitive_bugs.map((b, i) => (
                     <li key={i} className="text-sm">
@@ -65,11 +77,11 @@ export function DayDetailView({ detail }: DayDetailViewProps) {
             )}
             {struct.tomorrow_script && struct.tomorrow_script.length > 0 && (
               <section>
-                <h3 className="text-xs uppercase tracking-wider mb-2" style={{ color: "#7d9d7c" }}>📋 明日脚本</h3>
+                <h3 className="text-xs uppercase tracking-wider mb-2" style={{ color: "var(--gold-bright)" }}>📋 明日脚本</h3>
                 <ol className="space-y-1.5">
                   {struct.tomorrow_script.map((s) => (
                     <li key={s.step} className="text-sm flex gap-3" style={{ color: "var(--text-primary)" }}>
-                      <span className="font-mono" style={{ color: "#7d9d7c" }}>{s.step}.</span>
+                      <span className="font-mono" style={{ color: "var(--gold-bright)" }}>{s.step}.</span>
                       <span>{s.action}</span>
                       <span className="text-xs" style={{ color: "var(--text-secondary)" }}>· {s.duration_minutes}min</span>
                     </li>
@@ -82,20 +94,42 @@ export function DayDetailView({ detail }: DayDetailViewProps) {
       })}
 
       {detail.manifestEntries.map((m) => (
-        <article key={m.id} className="space-y-3 p-5 md:p-6 rounded-2xl" style={{ background: "rgba(49,46,129,0.2)", border: "1px solid rgba(244,114,182,0.3)" }}>
+        <article
+          key={m.id}
+          className="space-y-3 p-5 md:p-6 rounded-2xl glow-border"
+          style={{
+            background: "var(--bg-card-glow)",
+            border: "1px solid var(--border-soft)",
+          }}
+        >
           <header className="flex items-center justify-between text-xs" style={{ color: "var(--text-secondary)" }}>
-            <span>{CATEGORY_LABELS[m.category] ?? m.category} · {formatTime(m.created_at)}</span>
+            <span style={{ color: "var(--gold-bright)" }}>{CATEGORY_LABELS[m.category] ?? m.category}</span>
+            <span style={{ color: "var(--text-secondary)", opacity: 0.7 }}>· {formatTime(m.created_at)}</span>
           </header>
           <p className="text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>{m.intention}</p>
           {m.ai_echo && (
-            <p className="text-sm leading-relaxed italic border-l-2 pl-3" style={{ color: "#fbcfe8", borderColor: "rgba(244,114,182,0.4)" }}>
+            <p
+              className="font-ai text-sm leading-relaxed italic border-l-2 pl-3"
+              style={{
+                color: "var(--gold-bright)",
+                borderColor: "var(--border-strong)",
+              }}
+            >
               {m.ai_echo}
             </p>
           )}
           {m.keywords.length > 0 && (
             <div className="flex flex-wrap gap-2 pt-1">
               {m.keywords.map((k, i) => (
-                <span key={i} className="px-2.5 py-0.5 text-xs rounded-full" style={{ background: "rgba(244,114,182,0.15)", color: "#fbcfe8" }}>
+                <span
+                  key={i}
+                  className="px-2.5 py-0.5 text-xs rounded-full"
+                  style={{
+                    background: "rgba(212,175,55,0.12)",
+                    color: "var(--gold-bright)",
+                    border: "1px solid var(--border-soft)",
+                  }}
+                >
                   {k}
                 </span>
               ))}

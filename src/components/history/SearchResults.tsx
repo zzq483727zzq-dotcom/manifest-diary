@@ -10,7 +10,14 @@ function highlightMatch(snippet: string, query: string) {
   return (
     <>
       {snippet.slice(0, idx)}
-      <mark style={{ background: "rgba(251,191,36,0.3)", color: "#fde68a", borderRadius: 2, padding: "0 2px" }}>
+      <mark
+        style={{
+          background: "rgba(212,175,55,0.30)",
+          color: "var(--gold-bright)",
+          borderRadius: 2,
+          padding: "0 2px",
+        }}
+      >
         {snippet.slice(idx, idx + query.length)}
       </mark>
       {snippet.slice(idx + query.length)}
@@ -33,10 +40,19 @@ export function SearchResults({ query, hits }: SearchResultsProps) {
           <Link
             href={`/history/${hit.date}`}
             className="block p-4 rounded-xl transition-colors"
-            style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)" }}
+            style={{
+              background: "var(--bg-card-glow)",
+              border: "1px solid var(--border-soft)",
+            }}
           >
             <div className="flex items-center justify-between text-xs mb-2" style={{ color: "var(--text-secondary)" }}>
-              <span>{hit.type === "journal" ? "🌙 复盘" : "✨ 显化"}</span>
+              <span
+                style={{
+                  color: hit.type === "journal" ? "var(--gold-bright)" : "var(--gold-solid)",
+                }}
+              >
+                {hit.type === "journal" ? "🌙 复盘" : "✨ 显化"}
+              </span>
               <span>{hit.date}</span>
             </div>
             <p className="text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>

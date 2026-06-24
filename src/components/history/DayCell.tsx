@@ -24,20 +24,20 @@ export function DayCell({
     ? {}
     : total >= 4
       ? {
-          background: "rgba(244, 114, 182, 0.25)",
+          background: "rgba(245, 215, 122, 0.22)",
           boxShadow:
-            "inset 0 0 0 1px rgba(244, 114, 182, 0.5)",
+            "inset 0 0 0 1px rgba(212, 175, 55, 0.55)",
         }
       : total >= 2
         ? {
-            background: "rgba(244, 114, 182, 0.15)",
+            background: "rgba(212, 175, 55, 0.14)",
             boxShadow:
-              "inset 0 0 0 1px rgba(244, 114, 182, 0.3)",
+              "inset 0 0 0 1px rgba(212, 175, 55, 0.35)",
           }
         : {
-            background: "rgba(244, 114, 182, 0.08)",
+            background: "rgba(212, 175, 55, 0.08)",
             boxShadow:
-              "inset 0 0 0 1px rgba(244, 114, 182, 0.2)",
+              "inset 0 0 0 1px rgba(212, 175, 55, 0.22)",
           };
 
   const inner = (
@@ -49,7 +49,7 @@ export function DayCell({
           ? "var(--text-primary)"
           : "var(--text-secondary)",
         opacity: hasEntries ? 1 : 0.5,
-        ...(isToday ? { boxShadow: "0 0 0 2px #fbbf24" } : {}),
+        ...(isToday ? { boxShadow: "0 0 0 2px var(--gold-bright)" } : {}),
         ...(hasEntries ? { cursor: "pointer" } : {}),
       }}
     >
@@ -59,13 +59,13 @@ export function DayCell({
           {(aggregate?.journalCount ?? 0) > 0 && (
             <span
               className="w-1 h-1 rounded-full"
-              style={{ background: "#fbbf24" }}
+              style={{ background: "var(--gold-bright)" }}
             />
           )}
           {(aggregate?.manifestCount ?? 0) > 0 && (
             <span
               className="w-1 h-1 rounded-full"
-              style={{ background: "#f472b6" }}
+              style={{ background: "var(--gold-solid)" }}
             />
           )}
         </div>
