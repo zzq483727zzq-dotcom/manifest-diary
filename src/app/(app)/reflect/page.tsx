@@ -8,6 +8,7 @@ import { HighlightCard } from '@/components/reflection/HighlightCard';
 import { BugCard } from '@/components/reflection/BugCard';
 import { ScriptCard } from '@/components/reflection/ScriptCard';
 import { StreamingReflectionParser } from '@/lib/ai/streaming-parser';
+import { reflectionSubtitle } from '@/lib/time-greeting';
 import type { ReflectionStructured, TomorrowStep } from '@/lib/ai/parse-response';
 
 interface JournalEntryLite {
@@ -23,6 +24,15 @@ export default function ReflectPage() {
   const [rawInput, setRawInput] = useState('');
   const [inputMethod, setInputMethod] = useState<'voice' | 'text' | 'mixed'>('text');
   const [error, setError] = useState<string | null>(null);
+
+  // Time-aware headline + subtitle — reflection isn't only a nighttime act.
+  const headerTitle = (() => {
+    const h = new Date().getHours();
+    if (h >= 6 && h < 11) return '早安，先深呼吸';
+    if (h >= 11 && h < 14) return '午间，先倒一倒';
+    if (h >= 14 && h < 18) return '下午，慢慢说';
+    return '夜深了，先深呼吸';
+  })();
 
   const runReflect = async (text: string, method: 'voice' | 'text' | 'mixed') => {
     setRawInput(text);
@@ -194,18 +204,31 @@ export default function ReflectPage() {
   return (
     <div className="space-y-6">
       <header className="text-center pt-4">
-        <h1 className="text-2xl font-light" style={{ color: 'var(--text-primary)' }}>
-          今夜，先深呼吸
+        <h1
+          className="font-serif font-light"
+          style={{
+            fontSize: 'clamp(1.5rem, 3.5vw, 2rem)',
+            letterSpacing: '0.06em',
+            color: 'var(--text-primary)',
+          }}
+        >
+          {headerTitle}
         </h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-          说也行，写也行——它会接住你
+        <p
+          className="text-sm mt-1 font-ai"
+          style={{ color: 'var(--text-secondary)' }}
+        >
+          {reflectionSubtitle(new Date())}
         </p>
       </header>
 
       {phase === 'idle' && !showRetry && <ReflectionInput onSubmit={handleSubmit} />}
 
       {error && (
-        <p className="text-sm text-center" style={{ color: 'var(--accent-rose)' }}>
+        <p
+          className="text-sm text-center"
+          style={{ color: 'var(--gold-bright)' }}
+        >
           {error}
         </p>
       )}
@@ -238,25 +261,30 @@ export default function ReflectPage() {
                 }}
                 className="flex-1 py-3 rounded-full"
                 style={{
-                  borderColor: 'var(--border)',
+                  borderColor: 'var(--border-strong)',
                   borderWidth: 1,
                   color: 'var(--text-secondary)',
+                  background: 'transparent',
                 }}
               >
                 重新写
               </button>
               <button
                 onClick={handleSave}
-                className="flex-[2] py-3 rounded-full font-medium"
-                style={{ background: 'var(--accent-rose-gold)', color: '#1a1a2e' }}
+                className="flex-[2] py-3 rounded-full font-medium ceremonial-tap"
+                style={{
+                  background: 'var(--gold-gradient)',
+                  color: '#1a120b',
+                  boxShadow: '0 0 20px rgba(212,175,55,0.30)',
+                }}
               >
-                ✨ 保存今晚的复盘
+                ✨ 封存这次复盘
               </button>
             </div>
           )}
           {phase === 'saving' && (
             <p className="text-center" style={{ color: 'var(--text-secondary)' }}>
-              正在保存...
+              正在封存...
             </p>
           )}
         </div>
@@ -276,17 +304,22 @@ export default function ReflectPage() {
               }}
               className="flex-1 py-3 rounded-full"
               style={{
-                borderColor: 'var(--border)',
+                borderColor: 'var(--border-strong)',
                 borderWidth: 1,
                 color: 'var(--text-secondary)',
+                background: 'transparent',
               }}
             >
               重新写
             </button>
             <button
               onClick={handleRetry}
-              className="flex-[2] py-3 rounded-full font-medium"
-              style={{ background: 'var(--accent-rose-gold)', color: '#1a1a2e' }}
+              className="flex-[2] py-3 rounded-full font-medium ceremonial-tap"
+              style={{
+                background: 'var(--gold-gradient)',
+                color: '#1a120b',
+                boxShadow: '0 0 20px rgba(212,175,55,0.30)',
+              }}
             >
               重新生成
             </button>
