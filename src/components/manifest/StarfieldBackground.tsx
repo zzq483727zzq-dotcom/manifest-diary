@@ -89,7 +89,7 @@ export function StarfieldBackground({ isTyping = false }: StarfieldBackgroundPro
           opacity: Math.random() * 0.7 + 0.25,
           speed: Math.random() * 0.005 + 0.002,
           glowRadius: size * 3,
-          // ~15% of stars get a rose-gold tint
+          // ~15% of stars get a warm-gold tint (gold-bright)
           isRose: Math.random() < 0.15,
         });
       }
@@ -165,7 +165,7 @@ export function StarfieldBackground({ isTyping = false }: StarfieldBackgroundPro
         const alpha = d.opacity * breath * brightnessBoost;
         ctx.beginPath();
         ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(224, 231, 255, ${Math.min(alpha, 0.5)})`;
+        ctx.fillStyle = `rgba(245, 230, 211, ${Math.min(alpha, 0.5)})`;
         ctx.fill();
       }
 
@@ -182,8 +182,8 @@ export function StarfieldBackground({ isTyping = false }: StarfieldBackgroundPro
         ctx.beginPath();
         ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
         if (star.isRose) {
-          // Rose-gold star (var(--accent-rose) ≈ #f472b6)
-          ctx.fillStyle = `rgba(244, 182, 215, ${opacity})`;
+          // Warm gold star (var(--gold-bright) ≈ #f5d77a)
+          ctx.fillStyle = `rgba(245, 215, 122, ${opacity})`;
         } else {
           ctx.fillStyle = `rgba(255, 224, 200, ${opacity})`;
         }
@@ -193,8 +193,8 @@ export function StarfieldBackground({ isTyping = false }: StarfieldBackgroundPro
           ctx.beginPath();
           ctx.arc(star.x, star.y, star.glowRadius, 0, Math.PI * 2);
           ctx.fillStyle = star.isRose
-            ? `rgba(244, 114, 182, ${opacity * 0.18})`
-            : `rgba(255, 182, 193, ${opacity * 0.12})`;
+            ? `rgba(212, 175, 55, ${opacity * 0.22})`
+            : `rgba(245, 215, 122, ${opacity * 0.14})`;
           ctx.fill();
         }
       }
@@ -227,8 +227,8 @@ export function StarfieldBackground({ isTyping = false }: StarfieldBackgroundPro
         const tailY = m.y - (m.vy / speedMag) * m.length;
         const grad = ctx.createLinearGradient(m.x, m.y, tailX, tailY);
         grad.addColorStop(0, `rgba(255, 235, 220, ${0.85 * fade})`);
-        grad.addColorStop(0.4, `rgba(244, 182, 215, ${0.45 * fade})`);
-        grad.addColorStop(1, `rgba(244, 114, 182, 0)`);
+        grad.addColorStop(0.4, `rgba(245, 215, 122, ${0.45 * fade})`);
+        grad.addColorStop(1, `rgba(212, 175, 55, 0)`);
         ctx.strokeStyle = grad;
         ctx.lineWidth = 1.4;
         ctx.beginPath();

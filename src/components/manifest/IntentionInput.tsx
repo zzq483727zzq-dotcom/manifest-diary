@@ -61,8 +61,8 @@ export function IntentionInput({ value, onChange, onSubmit, isProcessing }: Inte
                     width: s.size,
                     height: s.size,
                     background:
-                      "radial-gradient(circle, rgba(255,224,200,0.95) 0%, rgba(244,182,215,0.4) 60%, rgba(244,114,182,0) 100%)",
-                    boxShadow: "0 0 6px rgba(244,182,215,0.7)",
+                      "radial-gradient(circle, rgba(245,215,122,0.95) 0%, rgba(212,175,55,0.4) 60%, rgba(212,175,55,0) 100%)",
+                    boxShadow: "0 0 6px rgba(245,215,122,0.7)",
                     left: "50%",
                     top: "50%",
                   }}
@@ -105,11 +105,11 @@ export function IntentionInput({ value, onChange, onSubmit, isProcessing }: Inte
           placeholder="写下你的意图、愿望、或感谢……宇宙会听见"
           disabled={isProcessing}
           rows={4}
-          className="relative w-full bg-white/5 border rounded-2xl px-5 py-4 text-white/90 placeholder:text-white/30 resize-none outline-none transition-all duration-500 disabled:opacity-50"
+          className="relative w-full border rounded-2xl px-5 py-4 resize-none outline-none transition-all duration-500 disabled:opacity-50"
           style={{
-            borderColor: isFocused
-              ? "rgba(244,182,215,0.7)"
-              : "rgba(244,182,215,0.3)",
+            backgroundColor: "var(--bg-card-glow)",
+            borderColor: isFocused ? "var(--gold-bright)" : "var(--border-soft)",
+            color: "var(--text-primary)",
             boxShadow: isFocused ? "var(--shadow-glow)" : "none",
           }}
         />
@@ -122,17 +122,16 @@ export function IntentionInput({ value, onChange, onSubmit, isProcessing }: Inte
           whileHover={canSubmit ? { scale: 1.04 } : undefined}
           whileTap={canSubmit ? { scale: 0.96 } : undefined}
           transition={{ type: "spring", stiffness: 400, damping: 22 }}
-          className="relative overflow-hidden px-7 py-2.5 rounded-full text-sm font-medium text-white transition-colors duration-300 disabled:opacity-40"
+          className="relative overflow-hidden px-7 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 disabled:opacity-40"
           style={{
-            background: canSubmit
-              ? "linear-gradient(135deg, rgba(244,114,182,0.85), rgba(192,132,252,0.85))"
-              : "linear-gradient(135deg, rgba(244,114,182,0.4), rgba(192,132,252,0.4))",
+            background: "var(--gold-gradient)",
+            color: "#1a120b",
             boxShadow: canSubmit
-              ? "0 0 20px rgba(244,114,182,0.4), 0 0 40px rgba(244,114,182,0.15)"
+              ? "0 0 22px rgba(212,175,55,0.40), 0 0 44px rgba(212,175,55,0.15)"
               : "none",
           }}
         >
-          {/* Shimmer sweep */}
+          {/* Shimmer sweep — gold */}
           {canSubmit && (
             <motion.span
               key={shimmerKey}
@@ -142,7 +141,7 @@ export function IntentionInput({ value, onChange, onSubmit, isProcessing }: Inte
               transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
               style={{
                 background:
-                  "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.35) 50%, transparent 100%)",
+                  "linear-gradient(90deg, transparent 0%, rgba(245,215,122,0.45) 50%, transparent 100%)",
               }}
             />
           )}
@@ -161,7 +160,12 @@ export function IntentionInput({ value, onChange, onSubmit, isProcessing }: Inte
         </motion.button>
       </div>
 
-      <p className="text-center text-white/25 text-xs">Ctrl + Enter 提交</p>
+      <p
+        className="text-center text-xs"
+        style={{ color: "var(--text-secondary)", opacity: 0.6 }}
+      >
+        Ctrl + Enter 提交
+      </p>
     </div>
   );
 }

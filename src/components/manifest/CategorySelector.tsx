@@ -20,26 +20,25 @@ export function CategorySelector({ selected, onSelect }: CategorySelectorProps) 
             key={cat}
             onClick={() => onSelect(cat)}
             whileTap={{ scale: 0.94 }}
-            animate={{ scale: isSelected ? 1.06 : 1 }}
+            animate={{ scale: isSelected ? 1.03 : 1 }}
             transition={{ type: "spring", stiffness: 320, damping: 22 }}
-            className="relative px-4 py-2 rounded-full text-sm font-medium overflow-hidden border"
+            className="relative px-4 py-2 rounded-full text-sm font-medium overflow-hidden border ceremonial-tap"
             style={
               isSelected
                 ? {
                     borderColor: "transparent",
-                    background:
-                      "linear-gradient(135deg, rgba(244,114,182,0.85), rgba(192,132,252,0.75))",
-                    color: "#fff",
-                    boxShadow: "var(--shadow-glow)",
+                    background: "var(--gold-gradient)",
+                    color: "#1a120b",
+                    boxShadow: "0 0 18px rgba(212,175,55,0.45)",
                   }
                 : {
-                    borderColor: "rgba(255,255,255,0.18)",
-                    background: "rgba(255,255,255,0.04)",
-                    color: "rgba(255,255,255,0.6)",
+                    borderColor: "var(--border-soft)",
+                    background: "var(--bg-card-glow)",
+                    color: "var(--text-secondary)",
                   }
             }
           >
-            {/* Shimmer sweep on selected */}
+            {/* Shimmer sweep on selected — gold */}
             {isSelected && (
               <motion.span
                 aria-hidden
@@ -49,7 +48,7 @@ export function CategorySelector({ selected, onSelect }: CategorySelectorProps) 
                 transition={{ duration: 1.1, ease: "easeInOut", repeat: Infinity, repeatDelay: 2.4 }}
                 style={{
                   background:
-                    "linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent)",
+                    "linear-gradient(90deg, transparent, rgba(245,215,122,0.55), transparent)",
                   width: "40%",
                 }}
               />

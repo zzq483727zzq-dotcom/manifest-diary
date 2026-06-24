@@ -6,7 +6,7 @@ interface EchoBubbleProps {
   isLoading?: boolean;
 }
 
-/** Three breathing stardust dots — replaces the old spinner. */
+/** Three breathing gold stardust dots — replaces the old spinner. */
 function BreathingDots() {
   return (
     <span className="inline-flex items-center gap-1.5">
@@ -17,8 +17,8 @@ function BreathingDots() {
           style={{
             width: 5,
             height: 5,
-            background: "var(--accent-rose)",
-            boxShadow: "0 0 8px rgba(244,114,182,0.6)",
+            background: "var(--gold-bright)",
+            boxShadow: "0 0 8px rgba(245,215,122,0.7)",
           }}
           animate={{ opacity: [0.2, 1, 0.2], scale: [0.7, 1.2, 0.7] }}
           transition={{
@@ -42,10 +42,17 @@ export function EchoBubble({ echo, isLoading }: EchoBubbleProps) {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8, transition: { duration: 0.25 } }}
-          className="mx-auto max-w-md px-6 py-4 rounded-2xl bg-white/5 border border-white/10"
-          style={{ backdropFilter: "blur(6px)" }}
+          className="mx-auto max-w-md px-6 py-4 rounded-2xl"
+          style={{
+            backgroundColor: "var(--bg-card-glow)",
+            border: "1px solid var(--border-soft)",
+            backdropFilter: "blur(6px)",
+          }}
         >
-          <div className="flex items-center justify-center gap-3 text-white/50 text-sm tracking-wide">
+          <div
+            className="flex items-center justify-center gap-3 text-sm tracking-wide"
+            style={{ color: "var(--text-secondary)" }}
+          >
             <BreathingDots />
             <span>宇宙正在倾听……</span>
           </div>
@@ -57,16 +64,16 @@ export function EchoBubble({ echo, isLoading }: EchoBubbleProps) {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.2 } }}
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="glow-border relative mx-auto max-w-md px-6 py-5 rounded-2xl"
+          className="glow-border glow-pulse relative mx-auto max-w-md px-6 py-5 rounded-2xl"
           style={{
             background:
-              "linear-gradient(135deg, rgba(244,114,182,0.10), rgba(192,132,252,0.05))",
+              "linear-gradient(135deg, rgba(212,175,55,0.12), rgba(245,215,122,0.05))",
             boxShadow: "var(--shadow-glow)",
           }}
         >
           <p
-            className="text-center text-white/90 text-base leading-relaxed italic"
-            style={{ fontFamily: "'Georgia', 'Noto Serif SC', serif" }}
+            className="font-ai text-center text-base leading-relaxed italic"
+            style={{ color: "var(--text-primary)", letterSpacing: "0.04em" }}
           >
             {echo}
           </p>
