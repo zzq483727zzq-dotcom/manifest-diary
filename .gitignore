@@ -39,6 +39,9 @@ yarn-error.log*
 
 # stray folder
 /显化日记
+/.superpowers
+# plan docs are working files, not source
+/docs/superpowers/plans
 
 # typescript
 *.tsbuildinfo

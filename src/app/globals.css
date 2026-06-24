@@ -53,11 +53,15 @@
 }
 
 /* ── 暖夜主题（默认，首页/复盘/历史/登录）── */
+/* 底色：深靛蓝夜空（不发黄），暖橘台灯只在左上一缕局部光晕 */
 :root,
 [data-theme="night"] {
-  --bg-primary: radial-gradient(ellipse at 30% 18%, #3a2a1f 0%, #241a13 42%, #15100c 100%);
-  --bg-solid: #15100c;       /* 渐变回退色，用于 body background-color */
-  --bg-card: #1f1812;
+  --bg-primary:
+    radial-gradient(ellipse at 25% 12%, rgba(245,166,35,0.18) 0%, transparent 38%),
+    radial-gradient(ellipse at 78% 88%, rgba(90,70,190,0.16) 0%, transparent 42%),
+    linear-gradient(160deg, #0f1530 0%, #141a3a 52%, #0c1024 100%);
+  --bg-solid: #0c1024;       /* 渐变回退色，用于 body background-color */
+  --bg-card: rgba(28,34,64,0.55);
   --bg-card-glow: rgba(245,166,35,0.06);
   --text-primary: #f5e6d3;
   --text-secondary: #9b8b75;

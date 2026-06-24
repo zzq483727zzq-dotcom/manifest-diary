@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { computeEntryDate, formatDateZh, APP_TIMEZONE } from '@/lib/date';
+import { greetingText } from '@/lib/time-greeting';
 import { MorningGreeting } from '@/components/morning/MorningGreeting';
 import { ScriptStepRow } from '@/components/morning/ScriptStepRow';
 import { EmptyState } from '@/components/morning/EmptyState';
@@ -13,7 +14,8 @@ interface Step {
 
 export default async function HomePage() {
   const supabase = await createClient();
-  const today = computeEntryDate(new Date(), APP_TIMEZONE);
+  const now = new Date();
+  const today = computeEntryDate(now, APP_TIMEZONE);
 
   const { data: script } = await supabase
     .from('tomorrow_scripts')
@@ -24,10 +26,17 @@ export default async function HomePage() {
     .maybeSingle();
 
   const steps = (script?.steps as Step[] | undefined) ?? [];
+  const doneCount = steps.filter((s) => s.completed_at !== null).length;
+  const completionRate = steps.length > 0 ? doneCount / steps.length : 0;
 
   return (
     <div>
-      <MorningGreeting hasScript={steps.length > 0} date={formatDateZh(today)} />
+      <MorningGreeting
+        greeting={greetingText(now)}
+        date={formatDateZh(today)}
+        hasScript={steps.length > 0}
+        completionRate={completionRate}
+      />
       {steps.length === 0 ? (
         <EmptyState />
       ) : (

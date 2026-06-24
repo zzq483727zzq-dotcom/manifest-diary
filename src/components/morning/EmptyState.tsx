@@ -4,14 +4,35 @@ import Link from 'next/link';
 
 export function EmptyState() {
   return (
-    <div className="text-center py-12 space-y-4">
-      <p style={{ color: 'var(--text-secondary)' }}>
-        昨晚没写复盘，今天没有为你准备的脚本。
-      </p>
+    <div className="text-center py-16 space-y-6 animate-fade-in">
+      <div
+        className="mx-auto w-16 h-16 rounded-full flex items-center justify-center breathe"
+        style={{
+          background: 'var(--gold-soft)',
+          boxShadow: 'var(--shadow-glow)',
+        }}
+      >
+        <span style={{ fontSize: '1.8rem' }}>🌙</span>
+      </div>
+      <div className="space-y-2">
+        <p
+          className="font-serif text-lg"
+          style={{ color: 'var(--text-primary)' }}
+        >
+          今夜还没写下什么
+        </p>
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          把今天倒在这里，它替你接着
+        </p>
+      </div>
       <Link
         href="/reflect"
-        className="inline-block px-6 py-3 rounded-full font-medium"
-        style={{ background: 'var(--accent-rose-gold)', color: '#1a1a2e' }}
+        className="inline-block px-7 py-3 rounded-full font-medium ceremonial-tap glow-border"
+        style={{
+          background: 'var(--gold-gradient)',
+          color: '#1a1208',
+          boxShadow: '0 0 20px rgba(212,175,55,0.35)',
+        }}
       >
         ✨ 现在写一段
       </Link>

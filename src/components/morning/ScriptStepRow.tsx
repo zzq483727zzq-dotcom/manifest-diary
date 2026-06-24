@@ -48,27 +48,34 @@ export function ScriptStepRow({
       onClick={toggle}
       disabled={pending}
       whileTap={{ scale: 0.98 }}
-      className="w-full flex items-center gap-3 p-4 rounded-2xl text-left transition-opacity"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{
+        opacity: done ? 0.45 : 1,
+        y: 0,
+      }}
+      transition={{ duration: 0.4, delay: stepIdx * 0.08 }}
+      className="w-full flex items-center gap-3 p-4 rounded-2xl text-left"
       style={{
         backgroundColor: 'var(--bg-card)',
-        opacity: done ? 0.5 : 1,
-        boxShadow: 'var(--shadow-soft)',
-        color: '#5d4e37',
+        boxShadow: done ? 'none' : 'var(--shadow-soft)',
+        color: 'var(--text-primary)',
+        border: done ? '1px solid var(--border-soft)' : '1px solid var(--gold-soft)',
       }}
     >
       <span
-        className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium transition-all"
+        className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all"
         style={{
-          background: done ? '#7d9d7c' : 'transparent',
-          color: done ? 'white' : '#7d9d7c',
-          borderColor: '#7d9d7c',
-          borderWidth: 2,
+          background: done ? 'var(--gold-gradient)' : 'transparent',
+          color: done ? '#0c1024' : 'var(--gold-bright)',
+          border: '1.5px solid var(--gold-solid)',
         }}
       >
         {done ? '✓' : step}
       </span>
-      <span className={`flex-1 ${done ? 'line-through' : ''}`}>{action}</span>
-      <span className="text-xs" style={{ color: '#9b8b75' }}>
+      <span className={`flex-1 ${done ? 'line-through' : ''}`} style={{ opacity: done ? 0.6 : 1 }}>
+        {action}
+      </span>
+      <span className="text-xs text-meta">
         {durationMin} 分钟
       </span>
     </motion.button>
