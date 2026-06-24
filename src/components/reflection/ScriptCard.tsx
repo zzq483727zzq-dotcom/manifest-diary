@@ -29,14 +29,14 @@ export function ScriptCard({ steps, index = 0, onChange, readOnly }: ScriptCardP
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: index * 0.15 }}
-      className="rounded-3xl p-5"
+      className="rounded-3xl p-6 glow-border"
       style={{
         backgroundColor: 'var(--bg-card)',
-        color: '#5d4e37',
+        color: 'var(--text-primary)',
         boxShadow: 'var(--shadow-soft)',
       }}
     >
-      <h3 className="text-xs tracking-widest uppercase mb-3" style={{ color: '#7d9d7c' }}>
+      <h3 className="text-meta mb-3 text-gold" style={{ letterSpacing: '0.2em' }}>
         📋 明早无脑脚本
       </h3>
       <ol className="space-y-3">
@@ -44,23 +44,39 @@ export function ScriptCard({ steps, index = 0, onChange, readOnly }: ScriptCardP
           <li key={i} className="flex gap-3 items-start">
             <span
               className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium"
-              style={{ background: '#7d9d7c', color: 'white' }}
+              style={{
+                background: 'var(--gold-gradient)',
+                color: '#1a120b',
+              }}
             >
               {s.step}
             </span>
             {readOnly ? (
-              <span className="flex-1 leading-relaxed">{s.action}</span>
+              <span
+                className="flex-1 leading-relaxed"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                {s.action}
+              </span>
             ) : (
               <input
                 type="text"
                 value={s.action}
                 onChange={(e) => updateAction(i, e.target.value)}
-                className="flex-1 bg-transparent border-b focus:outline-none focus:border-b-2 leading-relaxed"
-                style={{ borderColor: 'rgba(125,157,124,0.3)', color: '#5d4e37' }}
+                className="flex-1 bg-transparent border-b focus:outline-none leading-relaxed py-0.5"
+                style={{
+                  borderColor: 'var(--border-soft)',
+                  color: 'var(--text-primary)',
+                }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--gold-solid)')}
+                onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--border-soft)')}
               />
             )}
-            <span className="text-xs" style={{ color: '#9b8b75' }}>
-              {s.duration_minutes}分钟
+            <span
+              className="text-xs flex-shrink-0"
+              style={{ color: 'var(--text-secondary)', opacity: 0.7 }}
+            >
+              {s.duration_minutes} 分钟
             </span>
           </li>
         ))}

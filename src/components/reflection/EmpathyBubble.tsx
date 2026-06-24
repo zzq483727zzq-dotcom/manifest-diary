@@ -13,20 +13,27 @@ export function EmpathyBubble({ text, isStreaming }: EmpathyBubbleProps) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="glow-border relative p-5 rounded-3xl"
+      className="glow-border glow-pulse relative p-6 rounded-3xl"
       style={{
-        backgroundColor: 'var(--bg-card-glow)',
+        backgroundColor: 'var(--bg-card)',
         boxShadow: 'var(--shadow-glow)',
       }}
     >
-      <p className="text-base leading-relaxed" style={{ color: 'var(--text-primary)' }}>
+      <p
+        className="font-ai text-base"
+        style={{
+          color: 'var(--text-primary)',
+          lineHeight: 1.85,
+          letterSpacing: '0.02em',
+        }}
+      >
         {text}
         {isStreaming && (
           <motion.span
-            animate={{ opacity: [1, 0.3, 1] }}
+            animate={{ opacity: [1, 0.2, 1] }}
             transition={{ duration: 1, repeat: Infinity }}
             className="inline-block w-2 h-4 ml-1 align-middle"
-            style={{ background: 'var(--accent)' }}
+            style={{ background: 'var(--gold-bright)' }}
           />
         )}
       </p>
