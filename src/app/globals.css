@@ -52,6 +52,31 @@
   }
 }
 
+/* ============================================
+   按钮光泽扫过动画
+   ============================================ */
+@keyframes shimmer-sweep {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+@keyframes moon-breathe {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+    box-shadow: 0 0 4px var(--gold-bright);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+    box-shadow: 0 0 16px var(--gold-bright);
+  }
+}
+
 /* ── 暖夜主题（默认，首页/复盘/历史/登录）── */
 /* 底色：深靛蓝夜空（不发黄），暖橘台灯只在左上一缕局部光晕 */
 :root,
@@ -77,6 +102,16 @@
   --gold-solid: #d4af37;
   --gold-soft: rgba(212,175,55,0.15);
   --gold-bright: #f5d77a;
+}
+
+/* ============================================
+   按钮交互系统
+   ============================================ */
+:root {
+  --btn-scale-press: 0.96;
+  --btn-scale-release: 1.02;
+  --btn-transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  --btn-glow-spread: 0 4px 20px rgba(212, 175, 55, 0.35);
 }
 
 /* ── 深紫天鹅绒主题（显化页专用）── */
@@ -192,11 +227,42 @@ h1, h2, h3, .font-serif {
   background-repeat: no-repeat;
   animation: shimmer 2.6s linear infinite;
 }
+/* 仪式感按压效果：一级操作按钮 */
 .ceremonial-tap {
-  transition: transform 180ms cubic-bezier(0.4,0,0.2,1), box-shadow 220ms ease;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  transition:
+    transform var(--btn-transition),
+    box-shadow var(--btn-transition);
   will-change: transform;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
-.ceremonial-tap:active { transform: scale(0.95); }
+
+.ceremonial-tap:active {
+  transform: scale(var(--btn-scale-press, 0.96)) !important;
+}
+
+.ceremonial-tap.primary {
+  position: relative;
+  overflow: hidden;
+}
+
+.ceremonial-tap.primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 60%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-sweep 1.8s linear infinite;
+  pointer-events: none;
+}
 
 /* 尊重减少动画偏好 */
 @media (prefers-reduced-motion: reduce) {
