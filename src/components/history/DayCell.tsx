@@ -58,8 +58,12 @@ export function DayCell({
         <div className="absolute bottom-1.5 flex gap-0.5">
           {(aggregate?.journalCount ?? 0) > 0 && (
             <span
-              className="w-1 h-1 rounded-full"
-              style={{ background: "var(--gold-bright)" }}
+              className="w-1.5 h-1.5 rounded-full border"
+              style={{
+                borderColor: "var(--gold-bright)",
+                background: "transparent",
+              }}
+              title="复盘"
             />
           )}
           {(aggregate?.manifestCount ?? 0) > 0 && (
