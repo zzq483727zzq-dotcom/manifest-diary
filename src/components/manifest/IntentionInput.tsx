@@ -128,9 +128,6 @@ export function IntentionInput({ value, onChange, onSubmit, isProcessing }: Inte
             color: "#1a120b",
             boxShadow: 'var(--btn-glow-spread)',
           }}
-          onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.96)'; }}
-          onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; setTimeout(() => { e.currentTarget.style.transform = 'scale(1)'; }, 150); }}
-          onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
         >
           {/* Shimmer sweep — gold */}
           {canSubmit && (
