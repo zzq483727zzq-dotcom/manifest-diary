@@ -122,14 +122,15 @@ export function IntentionInput({ value, onChange, onSubmit, isProcessing }: Inte
           whileHover={canSubmit ? { scale: 1.04 } : undefined}
           whileTap={canSubmit ? { scale: 0.96 } : undefined}
           transition={{ type: "spring", stiffness: 400, damping: 22 }}
-          className="relative overflow-hidden px-7 py-2.5 rounded-full text-sm font-medium transition-colors duration-300 disabled:opacity-40"
+          className="ceremonial-tap primary"
           style={{
             background: "var(--gold-gradient)",
             color: "#1a120b",
-            boxShadow: canSubmit
-              ? "0 0 22px rgba(212,175,55,0.40), 0 0 44px rgba(212,175,55,0.15)"
-              : "none",
+            boxShadow: 'var(--btn-glow-spread)',
           }}
+          onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.96)'; }}
+          onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; setTimeout(() => { e.currentTarget.style.transform = 'scale(1)'; }, 150); }}
+          onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
         >
           {/* Shimmer sweep — gold */}
           {canSubmit && (
