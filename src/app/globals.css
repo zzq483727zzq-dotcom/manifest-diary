@@ -235,13 +235,13 @@ h1, h2, h3, .font-serif {
   transition:
     transform var(--btn-transition),
     box-shadow var(--btn-transition);
-  will-change: transform;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
 }
 
 .ceremonial-tap:active {
-  transform: scale(var(--btn-scale-press, 0.96)) !important;
+  will-change: transform;
+  transform: scale(var(--btn-scale-press, 0.96));
 }
 
 .ceremonial-tap.primary {
