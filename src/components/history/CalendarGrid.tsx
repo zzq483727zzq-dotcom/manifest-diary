@@ -137,8 +137,11 @@ export function CalendarGrid({
       >
         <span className="flex items-center gap-1.5">
           <span
-            className="w-1.5 h-1.5 rounded-full"
-            style={{ background: "var(--gold-bright)" }}
+            className="w-1.5 h-1.5 rounded-full border"
+            style={{
+              borderColor: "var(--gold-bright)",
+              background: "transparent",
+            }}
           />{" "}
           复盘
         </span>
