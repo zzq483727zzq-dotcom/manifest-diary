@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { computeEntryDate, computeScheduledFor, APP_TIMEZONE } from '@/lib/date';
 import type { ReflectionStructured } from '@/lib/ai/parse-response';
+import { upsertMemoryIfSimilar } from '@/lib/ai/memory';
 
 interface CreateBody {
   rawInput: string;
@@ -40,6 +41,37 @@ export async function POST(req: NextRequest) {
 
   if (journalErr || !journal) {
     return NextResponse.json({ error: journalErr?.message || 'insert failed' }, { status: 500 });
+  }
+
+  // 记忆写入：从复盘中提炼用户画像
+  if (body.aiStructured) {
+    try {
+      const struct = body.aiStructured;
+      // 从 highlights 提炼主题记忆
+      if (struct.highlights && struct.highlights.length > 0) {
+        const top = struct.highlights[0];
+        await upsertMemoryIfSimilar({
+          userId: user.id,
+          memoryType: 'growth',
+          content: `用户近期高光：${top.fact}`,
+          evidence: top.why_it_counts,
+          importance: 2,
+        });
+      }
+      // 从 cognitive_bugs 提炼情绪模式记忆
+      if (struct.cognitive_bugs && struct.cognitive_bugs.length > 0) {
+        const bug = struct.cognitive_bugs[0];
+        await upsertMemoryIfSimilar({
+          userId: user.id,
+          memoryType: 'emotion_pattern',
+          content: `用户容易出现认知盲点：${bug.user_quote.slice(0, 30)}`,
+          evidence: bug.reframe,
+          importance: 2,
+        });
+      }
+    } catch (e) {
+      console.error('[journal] memory write failed:', e);
+    }
   }
 
   const scheduledFor = computeScheduledFor(entryDate);
