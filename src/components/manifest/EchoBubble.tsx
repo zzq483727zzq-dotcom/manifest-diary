@@ -9,23 +9,17 @@ interface EchoBubbleProps {
 /** Three breathing gold stardust dots — replaces the old spinner. */
 function BreathingDots() {
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span className="inline-flex items-center gap-2">
       {[0, 1, 2].map((i) => (
-        <motion.span
+        <span
           key={i}
-          className="block rounded-full"
+          className="rounded-full"
           style={{
-            width: 5,
-            height: 5,
+            width: 6,
+            height: 6,
             background: "var(--gold-bright)",
-            boxShadow: "0 0 8px rgba(245,215,122,0.7)",
-          }}
-          animate={{ opacity: [0.2, 1, 0.2], scale: [0.7, 1.2, 0.7] }}
-          transition={{
-            duration: 1.6,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: i * 0.3,
+            animation: `moon-breathe 1.4s ease-in-out ${i * 0.2}s infinite`,
+            boxShadow: "0 0 8px var(--gold-bright)",
           }}
         />
       ))}
@@ -54,7 +48,7 @@ export function EchoBubble({ echo, isLoading }: EchoBubbleProps) {
             style={{ color: "var(--text-secondary)" }}
           >
             <BreathingDots />
-            <span>宇宙正在倾听……</span>
+            <span>月隐正在聆听……</span>
           </div>
         </motion.div>
       ) : (
