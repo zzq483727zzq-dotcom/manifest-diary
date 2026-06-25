@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { logAiCall } from '@/lib/ai/log';
 import { buildReflectionPrompt } from '@/lib/ai/prompts/reflection';
+import { loadUserMemory, formatMemoryForPrompt } from '@/lib/ai/memory';
 
 // Node runtime: required for TextDecoder('gbk') with stream mode.
 export const runtime = 'nodejs';
@@ -50,9 +51,12 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  const memories = await loadUserMemory(user.id, 5);
+  const memoryContext = formatMemoryForPrompt(memories);
   const systemPrompt = buildReflectionPrompt({
     currentTime: new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
     recentContext: body.recentContext,
+    userMemory: memoryContext,
   });
 
   let upstream: Response;

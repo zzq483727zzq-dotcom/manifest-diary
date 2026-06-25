@@ -102,19 +102,24 @@ export const REFLECTION_SYSTEM_PROMPT = `# 你是谁
 
 当前时间：{{current_time}}
 {{recent_context}}
+{{user_memory}}
 
 # 输出格式
 
 先输出接住层（纯文本，不带任何 markdown），然后换两个空行，再输出严格的 JSON。
 JSON 必须能被 JSON.parse() 直接解析，不要包在 \`\`\`json 里。`;
 
-export function buildReflectionPrompt(context: {
+interface ReflectionPromptContext {
   currentTime: string;
   recentContext?: string;
-}): string {
+  userMemory?: string;
+}
+
+export function buildReflectionPrompt(context: ReflectionPromptContext): string {
   return REFLECTION_SYSTEM_PROMPT
     .replace('{{current_time}}', context.currentTime)
     .replace('{{recent_context}}', context.recentContext
       ? `最近记录摘要：${context.recentContext}`
-      : '这是用户第一次使用，没有历史记录。');
+      : '这是用户第一次使用，没有历史记录。')
+    .replace('{{user_memory}}', context.userMemory ?? '（暂无关于你的记忆。）');
 }
