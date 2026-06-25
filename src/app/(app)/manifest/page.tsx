@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { StarfieldBackground } from "@/components/manifest/StarfieldBackground";
+import { MoonMistBackground } from "@/components/manifest/MoonMistBackground";
 import { CategorySelector } from "@/components/manifest/CategorySelector";
 import { IntentionInput } from "@/components/manifest/IntentionInput";
 import { EchoBubble } from "@/components/manifest/EchoBubble";
@@ -123,7 +123,7 @@ export default function ManifestPage() {
       className="relative overflow-hidden"
       style={{ background: "transparent", color: "var(--text-primary)" }}
     >
-      <StarfieldBackground isTyping={isTyping || isProcessing} />
+      <MoonMistBackground isTyping={isTyping || isProcessing} />
       <div className="relative z-10 max-w-2xl mx-auto px-4 py-8 space-y-8">
         <motion.header
           initial={{ opacity: 0, y: -8 }}
