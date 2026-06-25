@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { buildEchoPrompt } from '@/lib/ai/prompts/echo';
 import { buildAnalyzePrompt } from '@/lib/ai/prompts/analyze';
+import { upsertMemoryIfSimilar } from '@/lib/ai/memory';
 
 export const runtime = 'nodejs';
 
@@ -65,6 +66,18 @@ export async function POST(request: Request) {
 
     if (isEcho) {
       await supabase.from('manifest_entries').update({ ai_echo: raw }).eq('id', entryId).eq('user_id', user.id);
+      // 记忆写入：从意图中提炼记忆片段
+      try {
+        await upsertMemoryIfSimilar({
+          userId: user.id,
+          memoryType: 'theme',
+          content: `用户显化意图：「${intention.slice(0, 50)}${intention.length > 50 ? '…' : ''}」`,
+          evidence: intention,
+          importance: 3,
+        });
+      } catch (e) {
+        console.error('[manifest/ai] memory write failed:', e);
+      }
       return new Response(JSON.stringify({ echo: raw }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     } else {
       let keywords: string[] = [];
