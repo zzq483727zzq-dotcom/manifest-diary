@@ -4,6 +4,7 @@ export interface DailyAggregate {
   date: string;
   journalCount: number;
   manifestCount: number;
+  lifeLogCount: number;
 }
 
 export interface DayDetail {
@@ -23,6 +24,14 @@ export interface DayDetail {
     keywords: string[];
     created_at: string;
   }>;
+  lifeLogs: Array<{
+    id: string;
+    type: string;
+    value: number | null;
+    unit: string | null;
+    content: string | null;
+    created_at: string;
+  }>;
 }
 
 export interface SearchHit {
@@ -38,7 +47,7 @@ export function aggregateMonthEntries(
 ): Record<string, DailyAggregate> {
   const out: Record<string, DailyAggregate> = {};
   const ensure = (date: string): DailyAggregate => {
-    if (!out[date]) out[date] = { date, journalCount: 0, manifestCount: 0 };
+    if (!out[date]) out[date] = { date, journalCount: 0, manifestCount: 0, lifeLogCount: 0 };
     return out[date];
   };
   for (const e of journalEntries) ensure(e.entry_date).journalCount += 1;
@@ -56,7 +65,7 @@ export async function fetchMonthAggregate(
   const lastDay = new Date(year, month, 0).getDate();
   const end = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
 
-  const [{ data: journals }, { data: manifests }] = await Promise.all([
+  const [{ data: journals }, { data: manifests }, { data: lifeLogs }] = await Promise.all([
     supabase
       .from("journal_entries")
       .select("entry_date")
@@ -69,9 +78,11 @@ export async function fetchMonthAggregate(
       .eq("user_id", userId)
       .gte("entry_date", start)
       .lte("entry_date", end),
+    supabase.from("life_logs").select("entry_date").eq("user_id", userId).gte("entry_date", start).lte("entry_date", end),
   ]);
-
-  return aggregateMonthEntries(journals ?? [], manifests ?? []);
+  const aggregate = aggregateMonthEntries(journals ?? [], manifests ?? []);
+  for (const row of lifeLogs ?? []) { if (!aggregate[row.entry_date]) aggregate[row.entry_date] = { date: row.entry_date, journalCount: 0, manifestCount: 0, lifeLogCount: 0 }; aggregate[row.entry_date].lifeLogCount += 1; }
+  return aggregate;
 }
 
 export async function fetchDayDetail(
@@ -79,7 +90,7 @@ export async function fetchDayDetail(
   date: string
 ): Promise<DayDetail> {
   const supabase = await createClient();
-  const [{ data: journals }, { data: manifests }] = await Promise.all([
+  const [{ data: journals }, { data: manifests }, { data: lifeLogs }] = await Promise.all([
     supabase
       .from("journal_entries")
       .select("id, raw_input, ai_response, ai_structured, created_at")
@@ -92,11 +103,13 @@ export async function fetchDayDetail(
       .eq("user_id", userId)
       .eq("entry_date", date)
       .order("created_at", { ascending: true }),
+    supabase.from("life_logs").select("id, type, value, unit, content, created_at").eq("user_id", userId).eq("entry_date", date).order("created_at", { ascending: true }),
   ]);
   return {
     date,
     journalEntries: journals ?? [],
     manifestEntries: manifests ?? [],
+    lifeLogs: lifeLogs ?? [],
   };
 }
 
