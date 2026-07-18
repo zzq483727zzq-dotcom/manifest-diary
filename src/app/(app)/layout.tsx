@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getSessionUser } from '@/lib/supabase/auth';
+import { hasLocalPassword, hasLocalSession } from '@/lib/local-auth';
 import { DashboardShell } from '@/components/dashboard/DashboardShell';
 
 export default async function AppLayout({
@@ -9,8 +9,8 @@ export default async function AppLayout({
 }) {
   // Fast JWT decode — no Supabase round-trip (~1ms vs ~300ms).
   // Middleware keeps the cookie fresh; RLS still enforces authz on writes.
-  const user = await getSessionUser();
-  if (!user) redirect('/login');
+  if (!hasLocalPassword()) redirect('/setup');
+  if (!await hasLocalSession()) redirect('/unlock');
 
-  return <DashboardShell userEmail={user.email}>{children}</DashboardShell>;
+  return <DashboardShell userEmail="本地用户">{children}</DashboardShell>;
 }

@@ -1,5 +1,3 @@
-import { redirect } from 'next/navigation';
-import { getSessionUser } from '@/lib/supabase/auth';
 import { fetchLifeLogs } from '@/lib/supabase/life';
 import { buildDashboardSummary } from '@/lib/life/aggregate';
 import { computeEntryDate, APP_TIMEZONE } from '@/lib/date';
@@ -13,10 +11,9 @@ import type { LifeLog } from '@/types/life';
 function shiftDate(date: string, days: number) { const value = new Date(`${date}T00:00:00Z`); value.setUTCDate(value.getUTCDate() + days); return value.toISOString().slice(0, 10); }
 
 export default async function HomePage() {
-  const user = await getSessionUser(); if (!user) redirect('/login');
   const today = computeEntryDate(new Date(), APP_TIMEZONE);
   let logs: LifeLog[] = [];
-  try { logs = await fetchLifeLogs(user.id, shiftDate(today, -6), today); } catch { logs = []; }
+  try { logs = await fetchLifeLogs('local', shiftDate(today, -6), today); } catch { logs = []; }
   const summary = buildDashboardSummary(logs, today);
   return <div className="dashboard-home">
     <header className="dashboard-topbar"><div><div className="eyebrow">{today.replaceAll('-', '.')} · 个人状态中心</div><h1>今天，先照顾好自己的节奏。</h1></div><QuickLogSheet /></header>
