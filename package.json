@@ -1,11 +1,17 @@
 {
-  "name": "manifest-diary",
+  "name": "clarity-life",
+  "productName": "澄境",
+  "description": "澄境 · CLARITY 个人生活管理系统",
+  "author": "CLARITY",
+  "main": "electron/main.cjs",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "desktop:dev": "npm run build && electron electron/main.cjs",
+    "desktop:build": "npm run build && electron-builder --win nsis",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -30,6 +36,21 @@
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.9",
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.clarity.life",
+    "productName": "澄境",
+    "directories": { "output": "release" },
+    "files": ["electron/**/*", "package.json"],
+    "extraResources": [
+      { "from": ".next/standalone", "to": "app" },
+      { "from": ".next/static", "to": "app/.next/static" },
+      { "from": "public", "to": "app/public" }
+    ],
+    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }] },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true, "createStartMenuShortcut": true, "shortcutName": "澄境" }
   }
 }
