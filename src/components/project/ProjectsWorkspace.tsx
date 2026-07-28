@@ -101,8 +101,7 @@ export function ProjectsWorkspace() {
     <div className="module-page">
       <header className="module-header projects-header">
         <div>
-          <div className="eyebrow">项目 · PROJECTS</div>
-          <h1>把想完成的事情变成可执行项目。</h1>
+          <h1>把想完成的事情变成可执行项目</h1>
           <p>先建项目，再拆任务。进度、截止日期和投入都会围绕项目汇总。</p>
         </div>
         <button type="button" className="primary-button" onClick={() => setDrawerOpen(true)}>
@@ -131,8 +130,7 @@ export function ProjectsWorkspace() {
           <div className="life-card skeleton-card" />
         </div>
       ) : projects.length === 0 ? (
-        <article className="life-card module-note">
-          <div className="eyebrow">空状态</div>
+        <article className="life-card module-note empty-state">
           <h2>{emptyCopy.title}</h2>
           <p>{emptyCopy.body}</p>
           <p style={{ marginTop: 16 }}>
@@ -152,7 +150,7 @@ export function ProjectsWorkspace() {
             >
               <div className="project-card-top">
                 <span className="project-color" style={{ background: project.color }} />
-                <span className="eyebrow">{PROJECT_STATUS_LABELS[project.status]}</span>
+                <span className="status-label">{PROJECT_STATUS_LABELS[project.status]}</span>
               </div>
               <h2>{project.name}</h2>
               {project.description ? <p className="project-desc">{project.description}</p> : null}
@@ -191,7 +189,6 @@ export function ProjectsWorkspace() {
             >
               ×
             </button>
-            <div className="eyebrow">新建项目</div>
             <h2 id="create-project-title">创建一个可执行项目</h2>
             <form className="stack-form" onSubmit={createProject}>
               <label>

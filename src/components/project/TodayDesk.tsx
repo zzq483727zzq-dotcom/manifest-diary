@@ -32,16 +32,15 @@ export function TodayDesk({
   return (
     <div className="module-page">
       <header className="module-header">
-        <div className="eyebrow">今日 · ACTION DESK</div>
-        <h1>今天先推进最重要的事。</h1>
+        <h1>今天先推进最重要的事</h1>
         <p>
           {totalActionable > 0
-            ? `当前有 ${totalActionable} 条值得关注的任务，从最紧急的一组开始。`
-            : '没有紧急任务。去项目里补下一步，或者记录一点投入。'}
+            ? `有 ${totalActionable} 条值得关注的任务，从最紧急的一组开始。`
+            : '没有紧急任务。去项目里补下一步，或记录一点投入。'}
         </p>
       </header>
 
-      <div className="today-stats">
+      <div className="today-stats" role="group" aria-label="本周概览">
         <div className="stat-card">
           <span>本周完成</span>
           <strong>{stats.completedThisWeek}</strong>
@@ -51,7 +50,7 @@ export function TodayDesk({
           <strong>{stats.activeProjects}</strong>
         </div>
         <div className="stat-card">
-          <span>本周完成率</span>
+          <span>完成率</span>
           <strong>{Math.round(stats.completionRate * 100)}%</strong>
         </div>
         <div className="stat-card">
@@ -61,13 +60,12 @@ export function TodayDesk({
       </div>
 
       {projects.length === 0 ? (
-        <article className="life-card module-note">
-          <div className="eyebrow">开始</div>
+        <article className="life-card module-note empty-state">
           <h2>还没有进行中的项目</h2>
           <p>把一个想完成的事情变成可执行的项目。</p>
           <p style={{ marginTop: 18 }}>
-            <Link className="primary-link" href="/projects">
-              创建第一个项目 →
+            <Link className="primary-button" href="/projects">
+              创建第一个项目
             </Link>
           </p>
         </article>
@@ -98,11 +96,11 @@ export function TodayDesk({
             })}
           </div>
 
-          <div style={{ marginTop: 22 }}>
+          <div className="today-projects-block">
             <div className="today-group-head">
               <h2>进行中项目</h2>
               <Link className="primary-link" href="/projects">
-                全部项目 →
+                全部项目
               </Link>
             </div>
             <div className="project-mini-grid">

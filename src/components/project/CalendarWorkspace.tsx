@@ -138,9 +138,8 @@ export function CalendarWorkspace({
   return (
     <div className="module-page">
       <header className="module-header">
-        <div className="eyebrow">日历 · CALENDAR</div>
-        <h1>按截止日期看清楚这一周和这个月。</h1>
-        <p>未完成用项目色标记，已完成弱化，逾期会更醒目。</p>
+        <h1>按截止日期看清楚这一周和这个月</h1>
+        <p>未完成用项目色标记，已完成弱化，逾期更醒目。</p>
       </header>
 
       <div className="calendar-toolbar">
@@ -270,8 +269,8 @@ export function CalendarWorkspace({
         </div>
 
         <aside className="life-card day-panel">
-          <div className="eyebrow">当日任务</div>
-          <h2 style={{ fontSize: 20, margin: '8px 0 14px' }}>{selected}</h2>
+          <h2 className="day-panel-title">{selected}</h2>
+          <p className="muted day-panel-sub">当日截止任务</p>
           <div className="day-panel-list">
             {selectedTasks.length === 0 ? (
               <p className="muted">这一天没有截止日期任务。</p>

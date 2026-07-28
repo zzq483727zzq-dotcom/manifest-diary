@@ -25,19 +25,22 @@ export default function SetupPage() {
   return (
     <main className="auth-page">
       <div className="auth-card">
-        <div className="eyebrow">CLARITY · 本地私密模式</div>
+        <div className="auth-brand">Clarity</div>
         <h1>先设置一个本地密码</h1>
         <p>密码只保存在这台设备上，用于保护你的项目与任务数据。</p>
         <form onSubmit={submit}>
-          <input
-            type="password"
-            minLength={6}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="至少 6 位"
-            autoFocus
-          />
-          <button type="submit">创建私密空间</button>
+          <label className="auth-label">
+            本地密码
+            <input
+              type="password"
+              minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="至少 6 位"
+              autoFocus
+            />
+          </label>
+          <button type="submit">创建工作台</button>
         </form>
         {error ? <small>{error}</small> : null}
       </div>

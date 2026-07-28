@@ -25,17 +25,20 @@ export default function UnlockPage() {
   return (
     <main className="auth-page">
       <div className="auth-card">
-        <div className="eyebrow">CLARITY · 个人项目执行系统</div>
+        <div className="auth-brand">Clarity</div>
         <h1>欢迎回来</h1>
         <p>输入本地密码，继续推进你的项目。</p>
         <form onSubmit={submit}>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="本地密码"
-            autoFocus
-          />
+          <label className="auth-label">
+            本地密码
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="输入密码"
+              autoFocus
+            />
+          </label>
           <button type="submit">解锁</button>
         </form>
         {error ? <small>{error}</small> : null}

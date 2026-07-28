@@ -125,15 +125,13 @@ export function SettingsWorkspace() {
   return (
     <div className="module-page">
       <header className="module-header">
-        <div className="eyebrow">设置 · SETTINGS</div>
-        <h1>本地密码与数据备份。</h1>
+        <h1>本地密码与数据备份</h1>
         <p>密码只存在本机。导出不会包含密码和会话。</p>
       </header>
 
       <div className="settings-grid">
         <article className="life-card">
-          <div className="eyebrow">安全</div>
-          <h2 style={{ fontSize: 20, margin: '10px 0 16px' }}>修改密码</h2>
+          <h2 className="settings-card-title">修改密码</h2>
           <form className="stack-form" onSubmit={changePassword}>
             <label>
               当前密码
@@ -173,8 +171,7 @@ export function SettingsWorkspace() {
         </article>
 
         <article className="life-card">
-          <div className="eyebrow">备份</div>
-          <h2 style={{ fontSize: 20, margin: '10px 0 16px' }}>JSON 导出 / 导入</h2>
+          <h2 className="settings-card-title">JSON 导出 / 导入</h2>
           <div className="stack-form">
             <p className="muted">导出内容包含 projects / tasks / subtasks / timeEntries。</p>
             <button type="button" className="secondary-button" disabled={busyBackup} onClick={() => void exportBackup()}>

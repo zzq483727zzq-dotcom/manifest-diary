@@ -163,8 +163,8 @@ export function ProjectBoard({
     <div className="module-page project-detail-page">
       <header className="module-header project-detail-header">
         <div>
-          <Link href="/projects" className="eyebrow">
-            ← 返回项目
+          <Link href="/projects" className="back-link">
+            返回项目
           </Link>
           <h1>{project.name}</h1>
           <p>
@@ -298,7 +298,6 @@ export function ProjectBoard({
             <button type="button" className="sheet-close" onClick={() => setCreateOpen(false)}>
               ×
             </button>
-            <div className="eyebrow">新建任务</div>
             <h2>给这个项目加一步行动</h2>
             <form className="stack-form" onSubmit={createTask}>
               <label>
@@ -571,8 +570,7 @@ function TaskDrawer({
         <button type="button" className="sheet-close" onClick={requestClose}>
           ×
         </button>
-        <div className="eyebrow">任务详情</div>
-        {loading ? (
+                {loading ? (
           <p className="muted">加载中…</p>
         ) : (
           <div className="stack-form">
