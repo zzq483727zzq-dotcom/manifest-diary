@@ -1,16 +1,18 @@
 import { redirect } from 'next/navigation';
 import { hasLocalPassword, hasLocalSession } from '@/lib/local-auth';
 import { DashboardShell } from '@/components/dashboard/DashboardShell';
+import { countActionBadge } from '@/lib/project/repository';
+import { localDateString } from '@/lib/project/date';
 
-export default async function AppLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  // Fast JWT decode — no Supabase round-trip (~1ms vs ~300ms).
-  // Middleware keeps the cookie fresh; RLS still enforces authz on writes.
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
   if (!hasLocalPassword()) redirect('/setup');
-  if (!await hasLocalSession()) redirect('/unlock');
+  if (!(await hasLocalSession())) redirect('/unlock');
 
-  return <DashboardShell userEmail="本地用户">{children}</DashboardShell>;
+  const todayBadge = countActionBadge(localDateString());
+
+  return (
+    <DashboardShell userEmail="本地用户" todayBadge={todayBadge}>
+      {children}
+    </DashboardShell>
+  );
 }

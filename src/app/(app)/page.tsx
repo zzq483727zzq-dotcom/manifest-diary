@@ -1,27 +1,49 @@
-import { fetchLifeLogs } from '@/lib/supabase/life';
-import { buildDashboardSummary } from '@/lib/life/aggregate';
-import { computeEntryDate, APP_TIMEZONE } from '@/lib/date';
-import { MetricCard } from '@/components/dashboard/MetricCard';
-import { TrendChart } from '@/components/dashboard/TrendChart';
-import { AchievementCard } from '@/components/dashboard/AchievementCard';
-import { QuickLogSheet } from '@/components/dashboard/QuickLogSheet';
-import { LifeInsightCard } from '@/components/dashboard/LifeInsightCard';
-import type { LifeLog } from '@/types/life';
+import Link from 'next/link';
+import { listProjects } from '@/lib/project/repository';
 
-function shiftDate(date: string, days: number) { const value = new Date(`${date}T00:00:00Z`); value.setUTCDate(value.getUTCDate() + days); return value.toISOString().slice(0, 10); }
+export const dynamic = 'force-dynamic';
 
-export default async function HomePage() {
-  const today = computeEntryDate(new Date(), APP_TIMEZONE);
-  let logs: LifeLog[] = [];
-  try { logs = await fetchLifeLogs('local', shiftDate(today, -6), today); } catch { logs = []; }
-  const summary = buildDashboardSummary(logs, today);
-  return <div className="dashboard-home">
-    <header className="dashboard-topbar"><div><div className="eyebrow">{today.replaceAll('-', '.')} · 个人状态中心</div><h1>今天，先照顾好自己的节奏。</h1></div><QuickLogSheet /></header>
-    <div className="dashboard-columns"><main className="dashboard-main"><section className="metrics-grid">
-      <MetricCard label="昨夜睡眠" value={summary.today.sleepHours?.toFixed(1) ?? '—'} unit={summary.today.sleepHours == null ? '' : 'h'} hint={summary.today.sleepHours == null ? '记录后建立睡眠基线' : '你的恢复时间'} />
-      <MetricCard label="今日专注" value={String(summary.today.focusMinutes ?? '—')} unit={summary.today.focusMinutes == null ? '' : 'min'} hint="投入比忙碌更重要" />
-      <MetricCard label="当前能量" value={String(summary.today.energy ?? '—')} unit={summary.today.energy == null ? '' : '/5'} hint="允许状态有起伏" />
-      <MetricCard label="今日记录" value={`${Math.round(summary.today.completionRate * 100)}`} unit="%" hint="睡眠 · 专注 · 能量 · 行动" />
-    </section><TrendChart points={summary.trend} /><AchievementCard achievements={summary.achievements} /></main><LifeInsightCard coverageDays={summary.coverageDays} /></div>
-  </div>;
+export default function HomePage() {
+  const projects = listProjects('active');
+
+  return (
+    <div className="module-page">
+      <header className="module-header">
+        <div className="eyebrow">今日 · ACTION DESK</div>
+        <h1>今天先推进最重要的项目。</h1>
+        <p>先把要做的事情放进项目，再从今日行动台持续推进。</p>
+      </header>
+
+      {projects.length === 0 ? (
+        <article className="life-card module-note">
+          <div className="eyebrow">开始</div>
+          <h2>还没有进行中的项目</h2>
+          <p>把一个想完成的事情变成可执行的项目。</p>
+          <p style={{ marginTop: 18 }}>
+            <Link className="primary-link" href="/projects">
+              创建第一个项目 →
+            </Link>
+          </p>
+        </article>
+      ) : (
+        <div className="module-grid">
+          <article className="life-card module-note">
+            <div className="eyebrow">进行中项目</div>
+            <h2>{projects.length} 个项目正在推进</h2>
+            <p>任务看板、今日分组和日历会在后续工单接入。现在可以先管理项目。</p>
+            <p style={{ marginTop: 18 }}>
+              <Link className="primary-link" href="/projects">
+                查看项目 →
+              </Link>
+            </p>
+          </article>
+          <article className="life-card module-note">
+            <div className="eyebrow">下一步</div>
+            <h2>进入项目，添加第一条任务</h2>
+            <p>任务必须归属项目。这能避免待办堆积，让执行始终围绕项目完成。</p>
+          </article>
+        </div>
+      )}
+    </div>
+  );
 }
