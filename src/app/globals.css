@@ -1059,6 +1059,341 @@ h1, h2, h3, .font-serif {
   line-height: 1.6;
 }
 
+.drawer-panel.wide {
+  width: min(520px, 100%);
+}
+
+.drawer-section {
+  border-top: 1px solid var(--life-line);
+  padding-top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.drawer-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--life-muted);
+  font-size: 13px;
+}
+
+.drawer-section-head strong {
+  color: var(--life-ink);
+  font-weight: 600;
+}
+
+.subtask-list,
+.time-entry-list {
+  display: grid;
+  gap: 8px;
+}
+
+.subtask-row,
+.time-entry-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--life-line);
+  font-size: 13px;
+}
+
+.time-entry-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.subtask-row .is-done {
+  color: var(--life-muted);
+  text-decoration: line-through;
+}
+
+.subtask-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.inline-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.inline-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.stack-form.compact {
+  gap: 10px;
+}
+
+.secondary-button {
+  border: 1px solid var(--life-line);
+  background: #fff;
+  color: var(--life-ink);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.secondary-button:hover {
+  border-color: rgba(15, 118, 110, 0.35);
+  color: var(--life-accent);
+}
+
+.danger-text {
+  color: var(--life-danger) !important;
+}
+
+.today-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.stat-card {
+  background: #fff;
+  border: 1px solid var(--life-line);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.03);
+}
+
+.stat-card strong {
+  display: block;
+  font-size: 22px;
+  letter-spacing: -0.03em;
+  margin-top: 8px;
+  color: var(--life-ink);
+}
+
+.stat-card span {
+  color: var(--life-muted);
+  font-size: 12px;
+}
+
+.today-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.today-group {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--life-line);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.today-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+
+.today-group-head h2 {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.today-group-head span {
+  color: var(--life-muted);
+  font-size: 12px;
+}
+
+.today-task {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--life-line);
+  text-decoration: none;
+  color: inherit;
+}
+
+.today-task:first-of-type {
+  border-top: 0;
+}
+
+.today-task:hover .task-title-btn,
+.today-task:hover strong {
+  color: var(--life-accent);
+}
+
+.today-task strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--life-ink);
+}
+
+.today-task small {
+  color: var(--life-muted);
+  font-size: 12px;
+}
+
+.project-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.project-mini-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  background: #fff;
+  border: 1px solid var(--life-line);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.project-mini-card:hover {
+  border-color: rgba(15, 118, 110, 0.28);
+}
+
+.progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--life-soft);
+  overflow: hidden;
+  margin-top: 12px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--life-accent);
+  border-radius: inherit;
+}
+
+.calendar-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.calendar-dow {
+  color: var(--life-muted);
+  font-size: 12px;
+  text-align: center;
+  padding: 4px 0 8px;
+}
+
+.calendar-cell {
+  min-height: 108px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--life-line);
+  border-radius: 12px;
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.calendar-cell.muted {
+  opacity: 0.45;
+}
+
+.calendar-cell.selected {
+  border-color: rgba(15, 118, 110, 0.45);
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.08);
+}
+
+.calendar-cell.today {
+  background: rgba(15, 118, 110, 0.05);
+}
+
+.calendar-day-num {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.calendar-pill {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  padding: 4px 6px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  text-align: left;
+  color: #0f172a;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.calendar-pill.done {
+  opacity: 0.55;
+}
+
+.calendar-pill.overdue {
+  outline: 1px solid rgba(225, 29, 72, 0.35);
+}
+
+.calendar-more {
+  color: var(--life-muted);
+  font-size: 11px;
+}
+
+.calendar-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+}
+
+.day-panel {
+  position: sticky;
+  top: 18px;
+}
+
+.day-panel-list {
+  display: grid;
+  gap: 10px;
+}
+
+.day-panel-item {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--life-line);
+  border-radius: 12px;
+  padding: 12px;
+  background: #fff;
+}
+
+.day-panel-item:hover {
+  border-color: rgba(15, 118, 110, 0.3);
+}
+
+.settings-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 @media (max-width: 1100px) {
   .project-detail-header {
     flex-direction: column;
@@ -1080,5 +1415,17 @@ h1, h2, h3, .font-serif {
   }
   .meta-grid {
     grid-template-columns: 1fr;
+  }
+  .today-stats,
+  .project-mini-grid,
+  .settings-grid,
+  .calendar-layout {
+    grid-template-columns: 1fr;
+  }
+  .calendar-cell {
+    min-height: 72px;
+  }
+  .day-panel {
+    position: static;
   }
 }

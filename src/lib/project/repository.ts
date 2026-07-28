@@ -353,6 +353,35 @@ export function deleteSubtask(id: string) {
   touchProject(task.project_id, at);
 }
 
+export function moveSubtask(id: string, direction: 'up' | 'down'): Subtask {
+  const row = localDb.prepare('SELECT * FROM subtasks WHERE id = ?').get(id) as SubtaskRow | undefined;
+  if (!row) throw new Error('子任务不存在');
+  const siblings = listSubtasks(row.task_id);
+  const index = siblings.findIndex((item) => item.id === id);
+  if (index < 0) throw new Error('子任务不存在');
+  const swapWith = direction === 'up' ? siblings[index - 1] : siblings[index + 1];
+  if (!swapWith) return mapSubtask(row);
+
+  const at = nowIso();
+  const task = getTask(row.task_id);
+  if (!task) throw new Error('任务不存在');
+  localDb.exec('BEGIN');
+  try {
+    localDb
+      .prepare('UPDATE subtasks SET position = ?, updated_at = ? WHERE id = ?')
+      .run(swapWith.position, at, row.id);
+    localDb
+      .prepare('UPDATE subtasks SET position = ?, updated_at = ? WHERE id = ?')
+      .run(row.position, at, swapWith.id);
+    touchProject(task.project_id, at);
+    localDb.exec('COMMIT');
+  } catch (error) {
+    localDb.exec('ROLLBACK');
+    throw error;
+  }
+  return listSubtasks(row.task_id).find((item) => item.id === id)!;
+}
+
 export function listTimeEntries(taskId: string): TimeEntry[] {
   return localDb
     .prepare('SELECT * FROM time_entries WHERE task_id = ? ORDER BY logged_date DESC, created_at DESC')
@@ -453,4 +482,274 @@ export function weekMinutes(start: string, end: string): number {
     )
     .get(start, end) as { total: number };
   return Number(row.total) || 0;
+}
+
+export interface TodayGroups {
+  overdue: TaskWithMeta[];
+  dueToday: TaskWithMeta[];
+  highSoon: TaskWithMeta[];
+  inProgress: TaskWithMeta[];
+}
+
+export function listTodayGroups(today: string, horizon = 3): TodayGroups {
+  const open = listTasks().filter(
+    (task) => task.status !== 'completed' && task.project_status !== 'archived',
+  );
+  const priorityRank: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
+  const sortOpen = (a: TaskWithMeta, b: TaskWithMeta) => {
+    if (priorityRank[a.priority] !== priorityRank[b.priority]) {
+      return priorityRank[a.priority] - priorityRank[b.priority];
+    }
+    if (Boolean(a.due_date) !== Boolean(b.due_date)) return a.due_date ? -1 : 1;
+    if (a.due_date && b.due_date && a.due_date !== b.due_date) {
+      return a.due_date.localeCompare(b.due_date);
+    }
+    return a.updated_at.localeCompare(b.updated_at);
+  };
+
+  const used = new Set<string>();
+  const pick = (predicate: (task: TaskWithMeta) => boolean) => {
+    const items = open.filter((task) => !used.has(task.id) && predicate(task)).sort(sortOpen);
+    for (const item of items) used.add(item.id);
+    return items;
+  };
+
+  const horizonEnd = (() => {
+    const date = new Date(`${today}T12:00:00`);
+    date.setDate(date.getDate() + horizon);
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  })();
+
+  return {
+    overdue: pick((task) => Boolean(task.due_date && task.due_date < today)),
+    dueToday: pick((task) => task.due_date === today),
+    highSoon: pick(
+      (task) =>
+        task.priority === 'high' &&
+        Boolean(task.due_date && task.due_date > today && task.due_date <= horizonEnd),
+    ),
+    inProgress: pick((task) => task.status === 'in_progress'),
+  };
+}
+
+export interface WeekStats {
+  completedThisWeek: number;
+  createdOrOpenThisWeek: number;
+  completionRate: number;
+  minutesThisWeek: number;
+  activeProjects: number;
+}
+
+export function getWeekStats(today: string): WeekStats {
+  const start = (() => {
+    const date = new Date(`${today}T12:00:00`);
+    const day = date.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    date.setDate(date.getDate() + diff);
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  })();
+  const end = today;
+
+  const completedRow = localDb
+    .prepare(
+      `SELECT COUNT(*) AS count
+         FROM tasks t
+         JOIN projects p ON p.id = t.project_id
+        WHERE t.status = 'completed'
+          AND t.completed_at IS NOT NULL
+          AND substr(t.completed_at, 1, 10) >= ?
+          AND substr(t.completed_at, 1, 10) <= ?`,
+    )
+    .get(start, end) as { count: number };
+
+  const openRow = localDb
+    .prepare(
+      `SELECT COUNT(*) AS count
+         FROM tasks t
+         JOIN projects p ON p.id = t.project_id
+        WHERE p.status != 'archived'
+          AND t.status != 'completed'`,
+    )
+    .get() as { count: number };
+
+  const completed = Number(completedRow.count) || 0;
+  const stillOpen = Number(openRow.count) || 0;
+  const denom = completed + stillOpen;
+  return {
+    completedThisWeek: completed,
+    createdOrOpenThisWeek: denom,
+    completionRate: denom === 0 ? 0 : completed / denom,
+    minutesThisWeek: weekMinutes(start, end),
+    activeProjects: listProjects('active').length,
+  };
+}
+
+export function listTasksByDueRange(start: string, end: string): TaskWithMeta[] {
+  return listTasks().filter((task) => {
+    if (!task.due_date) return false;
+    return task.due_date >= start && task.due_date <= end;
+  });
+}
+
+export interface BackupPayload {
+  version: 1;
+  exported_at: string;
+  projects: Project[];
+  tasks: Task[];
+  subtasks: Subtask[];
+  timeEntries: TimeEntry[];
+}
+
+export function exportBackup(): BackupPayload {
+  const projects = localDb.prepare('SELECT * FROM projects ORDER BY created_at ASC').all() as ProjectRow[];
+  const tasks = localDb.prepare('SELECT * FROM tasks ORDER BY created_at ASC').all() as TaskRow[];
+  const subtasks = localDb.prepare('SELECT * FROM subtasks ORDER BY created_at ASC').all() as SubtaskRow[];
+  const timeEntries = localDb
+    .prepare('SELECT * FROM time_entries ORDER BY created_at ASC')
+    .all() as TimeEntryRow[];
+  return {
+    version: 1,
+    exported_at: nowIso(),
+    projects: projects.map(mapProject),
+    tasks,
+    subtasks: subtasks.map(mapSubtask),
+    timeEntries,
+  };
+}
+
+export function importBackup(payload: BackupPayload): {
+  projects: number;
+  tasks: number;
+  subtasks: number;
+  timeEntries: number;
+} {
+  if (!payload || payload.version !== 1) throw new Error('备份格式不支持');
+  if (!Array.isArray(payload.projects) || !Array.isArray(payload.tasks)) {
+    throw new Error('备份缺少项目或任务数据');
+  }
+
+  localDb.exec('BEGIN');
+  try {
+    for (const project of payload.projects) {
+      localDb
+        .prepare(
+          `INSERT INTO projects(id,name,description,color,target_date,status,created_at,updated_at,completed_at)
+           VALUES(?,?,?,?,?,?,?,?,?)
+           ON CONFLICT(id) DO UPDATE SET
+             name=excluded.name,
+             description=excluded.description,
+             color=excluded.color,
+             target_date=excluded.target_date,
+             status=excluded.status,
+             updated_at=excluded.updated_at,
+             completed_at=excluded.completed_at`,
+        )
+        .run(
+          project.id,
+          project.name,
+          project.description ?? '',
+          project.color,
+          project.target_date,
+          project.status,
+          project.created_at,
+          project.updated_at,
+          project.completed_at,
+        );
+    }
+
+    for (const task of payload.tasks ?? []) {
+      localDb
+        .prepare(
+          `INSERT INTO tasks(id,project_id,title,description,status,priority,due_date,position,created_at,updated_at,completed_at)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?)
+           ON CONFLICT(id) DO UPDATE SET
+             project_id=excluded.project_id,
+             title=excluded.title,
+             description=excluded.description,
+             status=excluded.status,
+             priority=excluded.priority,
+             due_date=excluded.due_date,
+             position=excluded.position,
+             updated_at=excluded.updated_at,
+             completed_at=excluded.completed_at`,
+        )
+        .run(
+          task.id,
+          task.project_id,
+          task.title,
+          task.description ?? '',
+          task.status,
+          task.priority,
+          task.due_date,
+          task.position ?? 0,
+          task.created_at,
+          task.updated_at,
+          task.completed_at,
+        );
+    }
+
+    for (const subtask of payload.subtasks ?? []) {
+      localDb
+        .prepare(
+          `INSERT INTO subtasks(id,task_id,title,is_done,position,created_at,updated_at)
+           VALUES(?,?,?,?,?,?,?)
+           ON CONFLICT(id) DO UPDATE SET
+             task_id=excluded.task_id,
+             title=excluded.title,
+             is_done=excluded.is_done,
+             position=excluded.position,
+             updated_at=excluded.updated_at`,
+        )
+        .run(
+          subtask.id,
+          subtask.task_id,
+          subtask.title,
+          subtask.is_done ? 1 : 0,
+          subtask.position ?? 0,
+          subtask.created_at,
+          subtask.updated_at,
+        );
+    }
+
+    for (const entry of payload.timeEntries ?? []) {
+      localDb
+        .prepare(
+          `INSERT INTO time_entries(id,task_id,minutes,logged_date,note,created_at,updated_at)
+           VALUES(?,?,?,?,?,?,?)
+           ON CONFLICT(id) DO UPDATE SET
+             task_id=excluded.task_id,
+             minutes=excluded.minutes,
+             logged_date=excluded.logged_date,
+             note=excluded.note,
+             updated_at=excluded.updated_at`,
+        )
+        .run(
+          entry.id,
+          entry.task_id,
+          entry.minutes,
+          entry.logged_date,
+          entry.note ?? '',
+          entry.created_at,
+          entry.updated_at,
+        );
+    }
+
+    localDb.exec('COMMIT');
+  } catch (error) {
+    localDb.exec('ROLLBACK');
+    throw error;
+  }
+
+  return {
+    projects: payload.projects.length,
+    tasks: (payload.tasks ?? []).length,
+    subtasks: (payload.subtasks ?? []).length,
+    timeEntries: (payload.timeEntries ?? []).length,
+  };
 }
