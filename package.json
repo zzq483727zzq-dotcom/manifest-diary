@@ -1,7 +1,7 @@
 {
-  "name": "clarity-life",
-  "productName": "澄境",
-  "description": "澄境 · CLARITY 个人项目执行系统",
+  "name": "clarity-project",
+  "productName": "Clarity",
+  "description": "Clarity · 个人项目执行系统：项目、任务、截止日期、耗时与今日行动台",
   "author": "CLARITY",
   "main": "electron/main.cjs",
   "version": "0.1.0",
@@ -41,8 +41,8 @@
     "electron-builder": "^26.0.12"
   },
   "build": {
-    "appId": "com.clarity.life",
-    "productName": "澄境",
+    "appId": "com.clarity.project",
+    "productName": "Clarity",
     "directories": {
       "output": "release"
     },
@@ -83,7 +83,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "澄境"
+      "shortcutName": "Clarity"
     }
   }
 }

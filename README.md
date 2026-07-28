@@ -1,36 +1,33 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Clarity · 个人项目执行系统
 
-## Getting Started
+本地优先的个人项目与任务管理系统：项目 → 任务 → 子任务，支持截止日期、耗时记录、今日行动台与月/周日历。
 
-First, run the development server:
+## 运行
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+打开 [http://localhost:3000](http://localhost:3000)。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+首次进入会要求设置本地密码；之后通过 `/unlock` 解锁。数据保存在本机 SQLite，不上传云端。
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 主要能力
 
-## Learn More
+- **今日行动台**：逾期 / 今日到期 / 未来 3 天高优 / 进行中
+- **项目与任务**：看板 + 列表，详情抽屉编辑
+- **子任务与耗时**：拆解执行，手动记录投入分钟
+- **日历**：月视图 / 周视图（周一开始），按截止日期查看
+- **设置**：修改本地密码，JSON 导出 / 导入备份
 
-To learn more about Next.js, take a look at the following resources:
+## 技术栈
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Next.js App Router · React · TypeScript · Tailwind · 本地 SQLite（`node:sqlite`）· Vitest
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 测试
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm test
+npx tsc --noEmit
+```

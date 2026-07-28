@@ -1,22 +1,37 @@
-import Link from 'next/link';
+import { listTasks } from '@/lib/project/repository';
+import { localDateString } from '@/lib/project/date';
+import { CalendarWorkspace } from '@/components/project/CalendarWorkspace';
 
-export default function CalendarPlaceholderPage() {
+export const dynamic = 'force-dynamic';
+
+interface PageProps {
+  searchParams: Promise<{
+    year?: string;
+    month?: string;
+    view?: string;
+    filter?: string;
+    day?: string;
+  }>;
+}
+
+export default async function CalendarPage({ searchParams }: PageProps) {
+  const query = await searchParams;
+  const today = localDateString();
+  const [ty, tm] = today.split('-').map(Number);
+  const year = Number(query.year) || ty;
+  const month = Number(query.month) || tm;
+  const view = query.view === 'week' ? 'week' : 'month';
+  const filter = query.filter === 'open' ? 'open' : 'all';
+  const tasks = listTasks().filter((task) => task.project_status !== 'archived');
+
   return (
-    <div className="module-page">
-      <header className="module-header">
-        <div className="eyebrow">日历 · CALENDAR</div>
-        <h1>按截止日期规划项目任务。</h1>
-        <p>月视图和周视图会在日历工单中接入。现在导航和数据底座已就绪。</p>
-      </header>
-      <article className="life-card module-note">
-        <h2>日历即将到来</h2>
-        <p>先创建项目和任务，再回来看截止日期分布。</p>
-        <p style={{ marginTop: 16 }}>
-          <Link className="primary-link" href="/projects">
-            先去项目 →
-          </Link>
-        </p>
-      </article>
-    </div>
+    <CalendarWorkspace
+      tasks={tasks}
+      initialYear={year}
+      initialMonth={month}
+      initialView={view}
+      initialFilter={filter}
+      initialSelected={query.day}
+    />
   );
 }
