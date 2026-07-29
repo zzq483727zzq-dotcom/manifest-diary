@@ -45,11 +45,9 @@ function NavIcon({ name }: { name: (typeof items)[number]['href'] }) {
 export function DashboardShell({
   children,
   userEmail,
-  todayBadge = 0,
 }: {
   children: ReactNode;
   userEmail: string;
-  todayBadge?: number;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -84,9 +82,6 @@ export function DashboardShell({
               <span className="nav-label">
                 <NavIcon name={item.href} />
                 {item.label}
-                {item.href === '/' && todayBadge > 0 ? (
-                  <em className="nav-badge">{todayBadge > 99 ? '99+' : todayBadge}</em>
-                ) : null}
               </span>
             </Link>
           ))}
@@ -116,9 +111,6 @@ export function DashboardShell({
           <Link key={item.href} href={item.href} className={isActive(item.href) ? 'active' : ''}>
             <NavIcon name={item.href} />
             {item.label}
-            {item.href === '/' && todayBadge > 0 ? (
-              <em className="nav-badge mobile">{todayBadge > 99 ? '99+' : todayBadge}</em>
-            ) : null}
           </Link>
         ))}
       </nav>
