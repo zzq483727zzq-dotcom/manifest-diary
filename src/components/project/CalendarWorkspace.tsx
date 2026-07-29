@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { TaskWithMeta } from '@/types/project';
@@ -136,7 +136,7 @@ export function CalendarWorkspace({
   }
 
   return (
-    <div className="module-page">
+    <div className="module-page calendar-page">
       <header className="module-header">
         <h1>按截止日期看清楚这一周和这个月</h1>
         <p>未完成用项目色标记，已完成弱化，逾期更醒目。</p>
@@ -144,46 +144,43 @@ export function CalendarWorkspace({
 
       <div className="calendar-toolbar">
         <div className="filter-row compact">
-          <button
-            type="button"
-            className={view === 'month' ? 'filter-chip active' : 'filter-chip'}
-            onClick={() => {
-              setView('month');
-              syncUrl({ view: 'month' });
-            }}
-          >
-            月
-          </button>
-          <button
-            type="button"
-            className={view === 'week' ? 'filter-chip active' : 'filter-chip'}
-            onClick={() => {
-              setView('week');
-              setWeekAnchor(selected);
-              syncUrl({ view: 'week' });
-            }}
-          >
-            周
-          </button>
-          <button
-            type="button"
-            className={filter === 'all' ? 'filter-chip active' : 'filter-chip'}
-            onClick={() => {
-              setFilter('all');
-              syncUrl({ filter: 'all' });
-            }}
-          >
-            全部
-          </button>
-          <button
-            type="button"
-            className={filter === 'open' ? 'filter-chip active' : 'filter-chip'}
-            onClick={() => {
-              setFilter('open');
-              syncUrl({ filter: 'open' });
-            }}
-          >
-            仅未完成
+          {([['month', '月'], ['week', '周']] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={view === value ? 'filter-chip active' : 'filter-chip'}
+              onClick={() => {
+                setView(value);
+                if (value === 'week') setWeekAnchor(selected);
+                syncUrl({ view: value });
+              }}
+            >
+              {label}
+            </button>
+          ))}
+          <span className="chip-divider" aria-hidden />
+          {([['all', '全部'], ['open', '仅未完成']] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={filter === value ? 'filter-chip active' : 'filter-chip'}
+              onClick={() => {
+                setFilter(value);
+                syncUrl({ filter: value });
+              }}
+            >
+              {label}
+            </button>
+          ))}
+          <button type="button" className="secondary-button today-jump" onClick={() => {
+            const ty = parseYMD(today);
+            setYear(ty.y);
+            setMonth(ty.m);
+            setSelected(today);
+            setWeekAnchor(today);
+            syncUrl({ year: ty.y, month: ty.m, selected: today });
+          }}>
+            今天
           </button>
         </div>
         <div className="inline-actions">
@@ -191,10 +188,11 @@ export function CalendarWorkspace({
             type="button"
             className="secondary-button"
             onClick={() => (view === 'month' ? shiftMonth(-1) : shiftWeek(-1))}
+            aria-label="上一段"
           >
-            上一段
+            ‹
           </button>
-          <strong>
+          <strong className="calendar-range">
             {view === 'month'
               ? `${year} 年 ${month} 月`
               : `${startOfWeek(weekAnchor)} – ${endOfWeek(weekAnchor)}`}
@@ -203,14 +201,15 @@ export function CalendarWorkspace({
             type="button"
             className="secondary-button"
             onClick={() => (view === 'month' ? shiftMonth(1) : shiftWeek(1))}
+            aria-label="下一段"
           >
-            下一段
+            ›
           </button>
         </div>
       </div>
 
       <div className="calendar-layout">
-        <div>
+        <div className="calendar-grid-wrap">
           <div className="calendar-grid">
             {['一', '二', '三', '四', '五', '六', '日'].map((label) => (
               <div key={label} className="calendar-dow">
@@ -218,11 +217,17 @@ export function CalendarWorkspace({
               </div>
             ))}
             {cells.map((date) => {
-              const { m } = parseYMD(date);
+              const { m, d } = parseYMD(date);
               const dayTasks = byDate.get(date) ?? [];
-              const visible = dayTasks.slice(0, view === 'week' ? 4 : 3);
+              const cap = view === 'week' ? 4 : 3;
+              const visible = dayTasks.slice(0, cap);
               const extra = dayTasks.length - visible.length;
               const outside = view === 'month' && m !== month;
+              const isToday = date === today;
+              const isSelected = date === selected;
+              const hasOverdue = dayTasks.some(
+                (t) => t.status !== 'completed' && t.due_date! < today,
+              );
               return (
                 <button
                   key={date}
@@ -230,8 +235,10 @@ export function CalendarWorkspace({
                   className={[
                     'calendar-cell',
                     outside ? 'muted' : '',
-                    date === selected ? 'selected' : '',
-                    date === today ? 'today' : '',
+                    isSelected ? 'selected' : '',
+                    isToday ? 'today' : '',
+                    hasOverdue ? 'has-overdue' : '',
+                    dayTasks.length === 0 ? 'empty' : '',
                   ]
                     .filter(Boolean)
                     .join(' ')}
@@ -241,7 +248,12 @@ export function CalendarWorkspace({
                     syncUrl({ selected: date });
                   }}
                 >
-                  <div className="calendar-day-num">{parseYMD(date).d}</div>
+                  <div className="calendar-day-num">
+                    <span>{d}</span>
+                    {dayTasks.length > 0 ? (
+                      <em className="calendar-count">{dayTasks.length}</em>
+                    ) : null}
+                  </div>
                   {visible.map((task) => {
                     const overdue = task.status !== 'completed' && task.due_date! < today;
                     return (
@@ -254,14 +266,17 @@ export function CalendarWorkspace({
                         ]
                           .filter(Boolean)
                           .join(' ')}
-                        style={{ background: `${task.project_color}33` }}
+                        style={{ '--pill': task.project_color } as CSSProperties}
                         title={task.title}
                       >
+                        <i className="pill-dot" style={{ background: task.project_color }} />
                         {task.title}
                       </span>
                     );
                   })}
-                  {extra > 0 ? <div className="calendar-more">还有 {extra} 项</div> : null}
+                  {extra > 0 ? (
+                    <div className="calendar-more">+{extra} 项</div>
+                  ) : null}
                 </button>
               );
             })}
@@ -269,25 +284,45 @@ export function CalendarWorkspace({
         </div>
 
         <aside className="life-card day-panel">
-          <h2 className="day-panel-title">{selected}</h2>
-          <p className="muted day-panel-sub">当日截止任务</p>
+          <div className="day-panel-head">
+            <h2 className="day-panel-title">{selected}</h2>
+            <span className="day-panel-sub muted">
+              {selectedTasks.length > 0 ? `当日截止 ${selectedTasks.length} 项` : '当日截止任务'}
+            </span>
+          </div>
           <div className="day-panel-list">
             {selectedTasks.length === 0 ? (
-              <p className="muted">这一天没有截止日期任务。</p>
+              <div className="calendar-empty-day">
+                <div className="calendar-empty-mark" aria-hidden />
+                <p className="calendar-empty-text">这一天没有截止任务。</p>
+                <p className="muted calendar-empty-hint">把约定放到相邻的工作日，留出专注空间。</p>
+              </div>
             ) : (
-              selectedTasks.map((task) => (
-                <Link
-                  key={task.id}
-                  href={`/projects/${task.project_id}?task=${task.id}`}
-                  className="day-panel-item"
-                >
-                  <strong>{task.title}</strong>
-                  <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
-                    {task.project_name} · {TASK_PRIORITY_LABELS[task.priority]} ·{' '}
-                    {TASK_STATUS_LABELS[task.status]}
-                  </div>
-                </Link>
-              ))
+              selectedTasks.map((task) => {
+                const overdue = task.status !== 'completed' && task.due_date! < today;
+                return (
+                  <Link
+                    key={task.id}
+                    href={`/projects/${task.project_id}?task=${task.id}`}
+                    className={[
+                      'day-panel-item',
+                      task.status === 'completed' ? 'done' : '',
+                      overdue ? 'overdue' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
+                    <span className="dp-bar" style={{ background: task.project_color }} />
+                    <span className="dp-body">
+                      <strong>{task.title}</strong>
+                      <span className="muted dp-meta">
+                        {task.project_name} · {TASK_PRIORITY_LABELS[task.priority]} ·{' '}
+                        {TASK_STATUS_LABELS[task.status]}
+                      </span>
+                    </span>
+                  </Link>
+                );
+              })
             )}
           </div>
         </aside>

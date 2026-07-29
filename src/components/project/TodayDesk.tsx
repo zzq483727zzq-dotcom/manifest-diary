@@ -77,12 +77,19 @@ export function TodayDesk({
           ? `有 ${overdueN} 条逾期、${dueN} 条今日到期。先清紧急，再看高优与进行中。`
           : `有 ${total} 条值得关注的任务，从最紧急的一组开始。`;
 
+  const metrics = [
+    { label: '本周完成', value: String(stats.completedThisWeek) },
+    { label: '进行中项目', value: String(stats.activeProjects) },
+    { label: '完成率', value: `${Math.round(stats.completionRate * 100)}%` },
+    { label: '本周投入', value: formatMinutes(stats.minutesThisWeek) },
+  ];
+
   return (
     <div className="td">
       <header className="td-hero">
         <p className="td-date">{dateLine()}</p>
         <div className="td-hero-row">
-          <div>
+          <div className="td-hero-text">
             <h1>今天先推进最重要的事</h1>
             <p className="td-lead">{lead}</p>
             <p className="td-data-note">演示数据 · 可直接在任务行完成或打开详情</p>
@@ -96,67 +103,79 @@ export function TodayDesk({
         </div>
       </header>
 
-      <section className="td-metrics" aria-label="本周概览">
-        <Metric label="本周完成" value={String(stats.completedThisWeek)} />
-        <Metric label="进行中项目" value={String(stats.activeProjects)} />
-        <Metric label="完成率" value={`${Math.round(stats.completionRate * 100)}%`} />
-        <Metric label="本周投入" value={formatMinutes(stats.minutesThisWeek)} />
+      <section className="td-stats" aria-label="本周概览">
+        {metrics.map((m, i) => (
+          <span className="td-stat" key={m.label}>
+            <span className="td-stat-value">{m.value}</span>
+            <span className="td-stat-label">{m.label}</span>
+          </span>
+        ))}
       </section>
 
       {projects.length === 0 ? (
         <article className="td-empty">
-          <div className="td-empty-icon" aria-hidden />
-          <h2>还没有进行中的项目</h2>
-          <p>Clarity 以项目为中心：任务必须归属项目，首页只强调今天要推进的事。</p>
-          <Link className="primary-button" href="/projects">
-            创建第一个项目
-          </Link>
+          <div className="td-empty-scene" aria-hidden>
+            <span className="td-empty-stack" />
+            <span className="td-empty-mark" />
+            <span className="td-empty-rail" />
+            <span className="td-empty-rail is-tall" />
+          </div>
+          <div className="td-empty-body">
+            <h2>还没有进行中的项目</h2>
+            <p>Clarity 以项目为中心：任务必须归属项目，首页只强调今天要推进的事。先建一个项目，再把想完成的事拆成可执行的下一步。</p>
+            <Link className="primary-button" href="/projects">
+              创建第一个项目
+            </Link>
+          </div>
         </article>
       ) : (
         <>
           <section className="td-board" aria-label="今日行动分组">
-            {GROUPS.map((g) => {
-              const items = groups[g.key];
-              const visible = items.slice(0, 5);
-              const urgentPanel = g.tone === 'danger' && items.length > 0;
-              return (
-                <section
-                  key={g.key}
-                  className={`td-panel tone-${g.tone}${urgentPanel ? ' is-hot' : ''}`}
-                >
-                  <header className="td-panel-h">
-                    <h2>
-                      <i className={`td-pip tone-${g.tone}`} aria-hidden />
-                      {g.title}
-                    </h2>
-                    <span className="td-count">{items.length}</span>
-                  </header>
+            <p className="td-board-note">按紧急程度自上而下，先清顶部一组再往下。</p>
+            <div className="td-board-grid">
+              {GROUPS.map((g) => {
+                const items = groups[g.key];
+                const visible = items.slice(0, 5);
+                const urgentPanel = g.tone === 'danger' && items.length > 0;
+                return (
+                  <section
+                    key={g.key}
+                    className={`td-panel tone-${g.tone}${urgentPanel ? ' is-hot' : ''}`}
+                  >
+                    <header className="td-panel-h">
+                      <h2>
+                        <i className={`td-pip tone-${g.tone}`} aria-hidden />
+                        {g.title}
+                      </h2>
+                      <span className="td-count">{items.length}</span>
+                    </header>
 
-                  {visible.length === 0 ? (
-                    <p className="td-empty-line">{g.empty}</p>
-                  ) : (
-                    <ul className="td-list">
-                      {visible.map((task) => (
-                        <li key={task.id}>
-                          <TaskRow
-                            task={task}
-                            hot={g.key === 'overdue'}
-                            busy={busyTaskId === task.id}
-                            onComplete={() => completeTask(task)}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                    {visible.length === 0 ? (
+                      <p className="td-panel-empty">{g.empty}</p>
+                    ) : (
+                      <ul className="td-list">
+                        {visible.map((task) => (
+                          <li key={task.id}>
+                            <TaskRow
+                              task={task}
+                              hot={g.key === 'overdue'}
+                              busy={busyTaskId === task.id}
+                              onComplete={() => completeTask(task)}
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
 
-                  {items.length > 5 ? (
-                    <Link href="/projects" className="td-more-link">
-                      还有 {items.length - 5} 条，查看全部
-                    </Link>
-                  ) : null}
-                </section>
-              );
-            })}
+                    {items.length > 5 ? (
+                      <Link href="/projects" className="td-more-link">
+                        还有 {items.length - 5} 条，查看全部
+                      </Link>
+                    ) : null}
+                  </section>
+                );
+              })}
+            </div>
           </section>
 
           <section className="td-projects" aria-label="进行中项目">
@@ -188,15 +207,6 @@ export function TodayDesk({
           </section>
         </>
       )}
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="td-metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
     </div>
   );
 }

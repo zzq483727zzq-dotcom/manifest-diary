@@ -104,18 +104,18 @@ body {
 .brand-mark {
   width: 34px;
   height: 34px;
-  border-radius: 10px;
+  border-radius: 12px;
   display: grid;
   place-items: center;
-  background: var(--life-accent-soft);
-  border: 1px solid rgba(15, 118, 110, 0.16);
+  background: var(--life-raised);
+  border: 1px solid var(--life-line);
   flex-shrink: 0;
 }
 
 .brand-mark-inner {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
   background: var(--life-accent);
 }
 
@@ -128,8 +128,8 @@ body {
 .dashboard-nav a {
   display: flex;
   align-items: center;
-  padding: 11px 12px;
-  border-radius: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
   color: var(--life-muted);
   border: 1px solid transparent;
   transition: background var(--life-control), color var(--life-control), border-color var(--life-control);
@@ -146,14 +146,14 @@ body {
 
 .dashboard-nav a:hover {
   color: var(--life-ink);
-  background: rgba(17, 24, 39, 0.03);
+  background: rgba(15, 23, 42, 0.035);
 }
 
 .dashboard-nav a.active {
   color: var(--life-ink);
-  background: var(--life-soft);
-  border-color: transparent;
-  box-shadow: none;
+  background: var(--life-raised);
+  border-color: var(--life-line);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.05);
   font-weight: 650;
 }
 
@@ -314,6 +314,13 @@ body {
   gap: 16px;
 }
 
+@media (min-width: 1280px) {
+  .module-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+  }
+}
+
 .life-card {
   background: var(--life-raised);
   border: 1px solid var(--life-line);
@@ -453,12 +460,21 @@ body {
 .drawer-panel {
   width: min(440px, 100%);
   height: 100%;
-  background: #fff;
+  background: var(--life-raised);
   border-left: 1px solid var(--life-line);
   padding: 28px 24px;
   position: relative;
   overflow: auto;
-  box-shadow: -18px 0 40px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 24px 48px rgba(15, 23, 42, 0.1);
+}
+
+.drawer-panel {
+  width: min(480px, 100%);
+  padding: 24px 26px 40px;
+}
+
+.drawer-panel.wide {
+  width: min(520px, 100%);
 }
 
 @media (max-width: 1100px) {
@@ -546,7 +562,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 18px;
+  margin: 4px 0 22px;
 }
 
 .filter-chip {
@@ -554,9 +570,11 @@ body {
   background: #fff;
   color: var(--life-muted);
   border-radius: 999px;
-  padding: 7px 12px;
+  padding: 6px 13px;
   cursor: pointer;
   font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
   transition: background var(--life-control), color var(--life-control), border-color var(--life-control);
 }
 
@@ -572,40 +590,106 @@ body {
 }
 
 .project-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   text-align: left;
   cursor: pointer;
-  transition: border-color var(--life-control), box-shadow var(--life-control);
+  padding: 0;
+  overflow: hidden;
+  width: 100%;
+  transition: border-color var(--life-control), box-shadow var(--life-control), transform var(--life-control);
+}
+
+.projects-grid {
+  align-items: stretch;
 }
 
 .project-card:hover {
-  border-color: rgba(15, 118, 110, 0.22);
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+  border-color: rgba(15, 118, 110, 0.3);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.project-card:active {
+  transform: scale(0.992);
+}
+
+.project-card-body {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px 20px;
+  flex: 1;
+}
+
+.project-card-bar {
+  width: 100%;
+  height: 3px;
+  flex-shrink: 0;
+  opacity: 0.85;
 }
 
 .project-card-top {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 24px;
 }
 
-.project-color {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  display: inline-block;
+.project-status-pill {
+  border: 1px solid var(--life-line);
+  background: #fff;
+  color: var(--life-muted);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.project-status-pill.project-status-active {
+  color: #0d9488;
+  border-color: rgba(13, 148, 136, 0.28);
+  background: rgba(13, 148, 136, 0.08);
+}
+
+.project-status-pill.project-status-completed {
+  color: var(--life-success);
+  border-color: rgba(21, 128, 61, 0.24);
+  background: rgba(21, 128, 61, 0.08);
+}
+
+.project-status-pill.project-status-archived {
+  color: var(--life-muted);
+  border-color: var(--life-line);
+  background: #f8fafc;
 }
 
 .project-card h2 {
-  margin-top: 12px;
-  font-size: 22px;
-  letter-spacing: -0.03em;
+  margin: 12px 0 0;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+  color: var(--life-ink);
+}
+
+.project-progress-value {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--life-accent);
+  font-variant-numeric: tabular-nums;
 }
 
 .project-desc {
   color: var(--life-muted);
-  margin-top: 8px;
-  font-size: 14px;
-  line-height: 1.6;
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -614,16 +698,42 @@ body {
 
 .project-meta {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   margin-top: 16px;
   color: var(--life-muted);
   font-size: 12px;
 }
 
+.project-meta-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.project-meta-due {
+  margin-left: auto;
+  text-align: right;
+}
+
+.project-meta-label {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--life-muted);
+  opacity: 0.85;
+  letter-spacing: 0;
+}
+
+.project-meta-value {
+  color: var(--life-ink);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
 .progress-track {
-  margin-top: 12px;
-  height: 6px;
+  margin-top: 14px;
+  height: 4px;
   border-radius: 999px;
   background: var(--life-soft);
   overflow: hidden;
@@ -642,11 +752,70 @@ body {
   animation: shimmer-sweep 1.4s linear infinite;
 }
 
+.projects-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0;
+  padding: 64px 24px 72px;
+  background: var(--life-raised);
+  border: 1px solid var(--life-line);
+  border-radius: 14px;
+  max-width: 460px;
+  margin: 8px auto 0;
+}
+
+.projects-empty-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--life-accent-soft);
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  display: block;
+  margin-bottom: 22px;
+  position: relative;
+}
+
+.projects-empty-mark::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--life-accent);
+  opacity: 0.85;
+}
+
+.projects-empty h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--life-ink);
+  line-height: 1.3;
+}
+
+.projects-empty p {
+  margin: 8px 0 22px;
+  color: var(--life-muted);
+  font-size: 14px;
+  line-height: 1.6;
+  max-width: 32ch;
+}
+
+.projects-empty .primary-button {
+  padding: 10px 18px;
+}
+
 .drawer-panel h2 {
-  font-size: 28px;
-  letter-spacing: -0.04em;
-  margin: 10px 0 22px;
-  font-weight: 600;
+  font-size: 26px;
+  letter-spacing: -0.03em;
+  margin: 8px 0 22px;
+  font-weight: 650;
+  line-height: 1.2;
 }
 
 .sheet-close {
@@ -728,7 +897,8 @@ body {
   }
 }
 
-/* Task board + drawer */
+/* Task board + drawer — Cool Fog Desk / Operate:
+   soft fog columns hold white task cards; restrained teal accent only. */
 .project-detail-page {
   max-width: 1280px;
 }
@@ -753,51 +923,83 @@ body {
 .board-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: 18px;
   align-items: start;
 }
 
 .board-column {
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--life-soft);
   border: 1px solid var(--life-line);
   border-radius: 16px;
-  min-height: 420px;
+  min-height: 380px;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .board-column-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 14px 10px;
+  padding: 15px 16px 13px;
   border-bottom: 1px solid var(--life-line);
   color: var(--life-muted);
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  background: rgba(255, 255, 255, 0.45);
 }
 
 .board-column-head strong {
   color: var(--life-ink);
+  font-weight: 650;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.board-column-head span {
+  font-variant-numeric: tabular-nums;
+  color: var(--life-muted);
+  background: var(--life-raised);
+  border: 1px solid var(--life-line);
+  border-radius: 999px;
+  padding: 1px 8px;
+  min-width: 22px;
+  text-align: center;
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0;
 }
 
 .board-column-body {
   padding: 12px;
   display: grid;
   gap: 10px;
+  flex: 1 1 auto;
 }
 
 .task-card {
-  background: #fff;
+  background: var(--life-raised);
   border: 1px solid var(--life-line);
   border-radius: 12px;
-  padding: 12px;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+  padding: 13px 14px 12px;
+  box-shadow: none;
+  transition: border-color var(--life-control), box-shadow var(--life-control), transform var(--life-control);
+}
+
+.task-card:hover {
+  border-color: rgba(15, 118, 110, 0.3);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 18px rgba(15, 23, 42, 0.05);
+}
+
+.task-card:active {
+  transform: scale(0.985);
 }
 
 .task-card-top {
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 9px;
   align-items: flex-start;
 }
 
@@ -813,9 +1015,12 @@ body {
   text-align: left;
   color: var(--life-ink);
   font: inherit;
-  font-weight: 600;
+  font-weight: 650;
+  font-size: 14.5px;
+  letter-spacing: -0.01em;
   cursor: pointer;
   line-height: 1.4;
+  transition: color var(--life-control);
 }
 
 .task-title-btn:hover {
@@ -824,65 +1029,125 @@ body {
 
 .task-card-meta {
   margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px dashed var(--life-line);
   color: var(--life-muted);
   font-size: 12px;
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
-/* 三态状态按钮：看板/列表卡片用，点击在 待办→进行中→已完成 间循环 */
+.task-card-meta .priority-dot {
+  margin-right: 1px;
+}
+
+.board-empty {
+  margin: 2px;
+  padding: 16px 14px;
+  color: var(--life-muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+  background: transparent;
+  border: 1px dashed var(--life-line);
+  border-radius: 12px;
+  text-align: left;
+}
+
+/* 三态状态按钮：看板/列表卡片用，点击在 待办→进行中→已完成 间循环。
+   保留三态点击逻辑，视觉克制：teal 是唯一强调色，已完成去饱和。 */
 .status-pill {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid var(--life-line);
-  background: #fff;
+  background: var(--life-raised);
   color: var(--life-muted);
   border-radius: 999px;
-  padding: 3px 10px;
+  padding: 3px 10px 3px 8px;
   font-size: 12px;
   font-weight: 600;
   line-height: 1.4;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition: background var(--life-control), color var(--life-control), border-color var(--life-control);
+}
+.status-pill::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.55;
 }
 .status-pill:hover {
   border-color: var(--life-accent);
   color: var(--life-accent);
 }
+.status-pill:hover::before {
+  opacity: 1;
+}
 .status-pill.status-todo {
-  background: #f8fafc;
+  background: var(--life-soft);
   color: var(--life-muted);
 }
+.status-pill.status-todo::before {
+  background: var(--life-muted);
+  opacity: 0.5;
+}
 .status-pill.status-in_progress {
-  background: rgba(13, 148, 136, 0.12);
-  border-color: rgba(13, 148, 136, 0.35);
-  color: #0d9488;
+  background: var(--life-accent-soft);
+  border-color: rgba(15, 118, 110, 0.32);
+  color: var(--life-accent-deep);
+}
+.status-pill.status-in_progress::before {
+  background: var(--life-accent);
+  opacity: 1;
 }
 .status-pill.status-completed {
-  background: rgba(16, 185, 129, 0.12);
-  border-color: rgba(16, 185, 129, 0.35);
-  color: #059669;
-  text-decoration: line-through;
+  background: var(--life-soft);
+  border-color: var(--life-line);
+  color: var(--life-muted);
+}
+.status-pill.status-completed::before {
+  background: var(--life-success);
+  opacity: 0.7;
 }
 
 /* 抽屉顶部栏：放显眼的删除任务快捷入口 */
 .drawer-topbar {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 12px;
+  margin: -4px 0 14px;
 }
 .danger-ghost {
-  border: 1px solid rgba(190, 18, 60, 0.25);
-  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(190, 18, 60, 0.28);
+  background: #fff1f2;
   color: var(--life-danger);
-  border-radius: 8px;
-  padding: 6px 12px;
+  border-radius: 10px;
+  padding: 8px 13px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  transition: background var(--life-control), border-color var(--life-control), transform var(--life-control);
+}
+.danger-ghost::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--life-danger);
 }
 .danger-ghost:hover {
-  background: #fff1f2;
+  background: #ffe1e7;
+  border-color: rgba(190, 18, 60, 0.45);
+}
+.danger-ghost:active {
+  transform: scale(0.97);
 }
 
 .priority-dot {
@@ -966,9 +1231,14 @@ body {
 
 .drawer-section {
   border-top: 1px solid var(--life-line);
-  padding-top: 16px;
+  padding-top: 20px;
+  margin-top: 20px;
   display: grid;
-  gap: 12px;
+  gap: 14px;
+}
+
+.drawer-section:first-of-type {
+  margin-top: 4px;
 }
 
 .drawer-section-head {
@@ -976,18 +1246,31 @@ body {
   justify-content: space-between;
   align-items: center;
   color: var(--life-muted);
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .drawer-section-head strong {
   color: var(--life-ink);
+  font-weight: 650;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+
+.drawer-section-head span {
+  font-variant-numeric: tabular-nums;
+  color: var(--life-muted);
+  font-size: 12px;
+  background: var(--life-soft);
+  border-radius: 999px;
+  padding: 2px 9px;
   font-weight: 600;
 }
 
 .subtask-list,
 .time-entry-list {
   display: grid;
-  gap: 8px;
+  gap: 2px;
 }
 
 .subtask-row,
@@ -996,9 +1279,14 @@ body {
   grid-template-columns: 28px minmax(0, 1fr) auto;
   gap: 8px;
   align-items: start;
-  padding: 8px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--life-line);
   font-size: 13px;
+}
+
+.subtask-row:last-child,
+.time-entry-row:last-child {
+  border-bottom: 0;
 }
 
 .time-entry-row {
@@ -1012,7 +1300,7 @@ body {
 
 .subtask-actions {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -1516,14 +1804,26 @@ body {
 .project-mini-card:hover { border-color: rgba(15, 118, 110, 0.28); box-shadow: var(--life-shadow); }
 
 .day-panel-title {
-  font-size: 20px;
-  margin: 0 0 4px;
+  font-size: 18px;
+  margin: 0;
   letter-spacing: -0.02em;
   font-weight: 650;
+  line-height: 1.25;
 }
 
 .day-panel-sub {
-  margin-bottom: 14px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.day-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--life-line);
 }
 
 .settings-card-title {
@@ -1576,116 +1876,654 @@ body {
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+}
+
+.calendar-toolbar .inline-actions {
+  gap: 6px;
+}
+
+.calendar-toolbar .secondary-button {
+  min-width: 30px;
+  padding: 6px 10px;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.calendar-range {
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  padding: 0 8px;
+  color: var(--life-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.today-jump {
+  margin-left: 4px;
+}
+
+.chip-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--life-line);
+}
+
+.calendar-grid-wrap {
+  background: var(--life-raised);
+  border: 1px solid var(--life-line);
+  border-radius: var(--life-radius);
+  overflow: hidden;
 }
 
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 8px;
+  gap: 0;
 }
 
 .calendar-dow {
   color: var(--life-muted);
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
   text-align: center;
-  padding: 4px 0 8px;
+  padding: 9px 0;
+  background: rgba(15, 23, 42, 0.018);
+  border-bottom: 1px solid var(--life-line);
+  border-right: 1px solid var(--life-line);
+}
+.calendar-dow:nth-child(7n) {
+  border-right: 0;
 }
 
+/* cells: hairlines only, no chunky borders; breathe via padding */
 .calendar-cell {
-  min-height: 108px;
-  background: rgba(255, 255, 255, 0.75);
-  border: 1px solid var(--life-line);
-  border-radius: 12px;
-  padding: 10px;
+  min-height: 116px;
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--life-line);
+  border-bottom: 1px solid var(--life-line);
+  border-radius: 0;
+  padding: 10px 9px 9px;
   text-align: left;
   cursor: pointer;
   color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  transition: background var(--life-control), box-shadow var(--life-control);
+}
+.calendar-cell:nth-child(7n + 7) {
+  border-right: 0;
+}
+.calendar-cell:hover {
+  background: rgba(15, 23, 42, 0.022);
+}
+.calendar-cell:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1.5px var(--life-accent);
 }
 
 .calendar-cell.muted {
-  opacity: 0.45;
+  color: var(--life-muted);
+}
+.calendar-cell.muted .calendar-day-num span,
+.calendar-cell.muted .calendar-pill,
+.calendar-cell.muted .calendar-more {
+  opacity: 0.38;
+}
+
+/* today: a quiet teal tint, not a loud fill */
+.calendar-cell.today {
+  background: rgba(15, 118, 110, 0.04);
+}
+.calendar-cell.today .calendar-day-num span {
+  color: var(--life-accent-deep);
 }
 
 .calendar-cell.selected {
-  border-color: rgba(15, 118, 110, 0.45);
-  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.08);
+  background: rgba(15, 118, 110, 0.06);
+  box-shadow: inset 0 0 0 1.5px var(--life-accent);
 }
-
-.calendar-cell.today {
-  background: rgba(15, 118, 110, 0.05);
+.calendar-cell.selected:hover {
+  background: rgba(15, 118, 110, 0.08);
+}
+.calendar-cell.selected.has-overdue {
+  box-shadow: inset 0 0 0 1.5px var(--life-danger);
 }
 
 .calendar-day-num {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin-bottom: 3px;
+}
+.calendar-day-num span {
+  font-variant-numeric: tabular-nums;
+}
+.calendar-count {
+  font-style: normal;
+  font-size: 10px;
   font-weight: 600;
-  margin-bottom: 8px;
+  color: var(--life-muted);
+  background: var(--life-soft);
+  border-radius: 999px;
+  padding: 1px 6px;
+  min-width: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .calendar-pill {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   width: 100%;
   border: 0;
-  border-radius: 8px;
-  padding: 4px 6px;
-  margin-bottom: 4px;
+  border-radius: 6px;
+  padding: 3px 7px;
   font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
   text-align: left;
-  color: #0f172a;
+  color: var(--life-ink);
+  background: color-mix(in srgb, var(--pill) 12%, transparent);
   cursor: pointer;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  transition: background var(--life-control);
+}
+.calendar-pill:hover {
+  background: color-mix(in srgb, var(--pill) 20%, transparent);
+}
+.pill-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pill);
 }
 
+/* done: recede — muted, faded dot, quiet strike */
 .calendar-pill.done {
-  opacity: 0.55;
+  background: transparent;
+  color: var(--life-muted);
+  opacity: 0.72;
+  text-decoration: line-through;
+  text-decoration-color: rgba(100, 116, 139, 0.4);
+  text-decoration-thickness: 1px;
+}
+.calendar-pill.done .pill-dot {
+  opacity: 0.35;
 }
 
+/* overdue: emphasized but restrained — rose type, solid dot, left accent rail */
 .calendar-pill.overdue {
-  outline: 1px solid rgba(225, 29, 72, 0.35);
+  background: color-mix(in srgb, var(--life-danger) 8%, transparent);
+  color: var(--life-danger);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 0 var(--life-danger);
+}
+.calendar-pill.overdue .pill-dot {
+  background: var(--life-danger);
+}
+
+.calendar-cell.has-overdue .calendar-day-num span {
+  position: relative;
+  color: var(--life-danger);
+  font-weight: 700;
+}
+.calendar-cell.has-overdue .calendar-day-num span::after {
+  content: '';
+  position: absolute;
+  left: -7px;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--life-danger);
+  transform: translateY(-50%);
 }
 
 .calendar-more {
+  margin-top: auto;
   color: var(--life-muted);
-  font-size: 11px;
+  font-size: 10.5px;
+  font-weight: 500;
 }
 
 .calendar-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 312px;
+  gap: 20px;
   align-items: start;
 }
 
 .day-panel {
   position: sticky;
   top: 18px;
+  padding: 18px;
 }
 
 .day-panel-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .day-panel-item {
-  display: block;
+  display: flex;
+  gap: 10px;
   text-decoration: none;
   color: inherit;
   border: 1px solid var(--life-line);
-  border-radius: 12px;
-  padding: 12px;
-  background: #fff;
+  border-radius: 10px;
+  padding: 10px 12px 10px 0;
+  background: var(--life-raised);
+  overflow: hidden;
+  transition: border-color var(--life-control), box-shadow var(--life-control);
+}
+.day-panel-item .dp-bar {
+  flex: none;
+  width: 3px;
+  align-self: stretch;
+  border-radius: 0 3px 3px 0;
+}
+.day-panel-item .dp-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.day-panel-item strong {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+.day-panel-item .dp-meta {
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.day-panel-item:hover {
+  border-color: rgba(15, 118, 110, 0.35);
+  box-shadow: var(--life-shadow);
+}
+.day-panel-item.done strong {
+  color: var(--life-muted);
+  opacity: 0.78;
+  text-decoration: line-through;
+  text-decoration-color: rgba(100, 116, 139, 0.45);
+}
+.day-panel-item.done .dp-bar {
+  opacity: 0.4;
+}
+.day-panel-item.overdue {
+  border-color: color-mix(in srgb, var(--life-danger) 28%, var(--life-line));
+}
+.day-panel-item.overdue .dp-bar {
+  background: var(--life-danger);
+}
+.day-panel-item.overdue strong {
+  color: var(--life-danger);
+  font-weight: 650;
+}
+.day-panel-item.overdue .dp-meta {
+  color: color-mix(in srgb, var(--life-danger) 70%, var(--life-muted));
 }
 
-.day-panel-item:hover {
-  border-color: rgba(15, 118, 110, 0.3);
+/* Projects list surface — Cool Fog Desk / Operate.
+   Scoped additions only: densify the desk grid and supply the composed
+   empty state (paper card + quiet teal mark). Cards themselves are styled
+   above under .project-card and left untouched here. */
+.projects-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 1280px) {
+  .projects-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .projects-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .projects-grid > .project-card {
+    transition: border-color var(--life-control), box-shadow var(--life-control), transform var(--life-control);
+  }
+}
+
+.projects-empty {
+  margin: 8px auto 0;
+  max-width: 480px;
+  padding: 40px clamp(24px, 5vw, 48px) 44px;
+  background: var(--life-raised);
+  border: 1px solid var(--life-line);
+  border-radius: var(--life-radius);
+  box-shadow: var(--life-shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.projects-empty-mark {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--life-accent);
+  margin-bottom: 22px;
+  box-shadow: 0 0 0 6px var(--life-accent-soft);
+}
+
+.projects-empty h2 {
+  margin: 0 0 12px;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  color: var(--life-ink);
+}
+
+.projects-empty p {
+  margin: 0 0 28px;
+  color: var(--life-muted);
+  font-size: 14px;
+  line-height: 1.65;
+  max-width: 36ch;
+}
+
+.projects-empty .primary-button {
+  min-width: 168px;
+  padding: 12px 22px;
+}
+
+@media (max-width: 1100px) {
+  .projects-empty {
+    margin: 4px 0 0;
+  }
+}
+
+/* elegantly empty day — fog mark, no chunky illustration */
+.calendar-empty-day {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px 2px 6px;
+}
+.calendar-empty-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px dashed rgba(15, 23, 42, 0.16);
+  margin-bottom: 6px;
+  opacity: 0.8;
+}
+.calendar-empty-text {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--life-ink);
+  letter-spacing: -0.01em;
+}
+.calendar-empty-hint {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  max-width: 32ch;
 }
 
 .settings-grid {
   display: grid;
   gap: 16px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* ===== Settings desk — single-column stacked blocks, hairline separators ===== */
+.settings-surface .module-header {
+  max-width: 720px;
+}
+
+.settings-block {
+  padding-top: 8px;
+}
+
+.settings-block + .settings-block {
+  padding-top: 4px;
+}
+
+.settings-block-head {
+  max-width: 640px;
+  margin-bottom: 18px;
+}
+
+.settings-block-title {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--life-ink);
+  margin: 0 0 6px;
+}
+
+.settings-block-desc {
+  color: var(--life-muted);
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0;
+  max-width: 56ch;
+}
+
+.settings-block-body {
+  max-width: 460px;
+}
+
+.settings-hairline {
+  border: 0;
+  border-top: 1px solid var(--life-line);
+  margin: 28px 0 8px;
+}
+
+.settings-import-preview,
+.settings-backup-msg {
+  margin: 0;
+}
+
+.settings-file-label {
+  color: var(--life-muted);
+  font-size: 12px;
+}
+
+/* Danger zone — restrained rose wash */
+.settings-danger-zone {
+  position: relative;
+  padding-left: 18px;
+}
+
+.settings-danger-zone::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(190, 18, 60, 0.45);
+}
+
+.settings-danger-zone .settings-block-title {
+  color: #9f1239;
+}
+
+.settings-danger-zone .danger-desc {
+  color: #9f1239;
+  opacity: 0.78;
+}
+
+.settings-danger-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.danger-wash-button {
+  border: 1px solid rgba(190, 18, 60, 0.28);
+  background: #fff1f2;
+  color: #9f1239;
+  border-radius: 10px;
+  padding: 10px 15px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--life-control), background var(--life-control), border-color var(--life-control);
+}
+
+.danger-wash-button:hover:not(:disabled) {
+  background: #ffe4e6;
+  border-color: rgba(190, 18, 60, 0.4);
+}
+
+.danger-wash-button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.danger-wash-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ===== Settings surface — visual-only polish (settings-only classes) ===== */
+.settings-export-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.settings-export-row .secondary-button {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.settings-export-copy {
+  margin: 0;
+  max-width: 46ch;
+  color: var(--life-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* Custom file pick — hairline panel, hides the native control */
+.settings-file-drop {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 14px;
+  border: 1px dashed var(--life-line);
+  border-radius: 12px;
+  background: var(--life-panel);
+  cursor: pointer;
+  transition: border-color var(--life-control), background var(--life-control);
+}
+
+.settings-file-drop:hover {
+  border-color: rgba(15, 118, 110, 0.4);
+  background: var(--life-soft);
+}
+
+.settings-file-drop input[type='file'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+/* override the base muted label color so the span reads as an affordance */
+.settings-file-drop .settings-file-label {
+  color: var(--life-muted);
+  font-size: 12px;
+  font-weight: 500;
+  grid-column: 1;
+}
+
+/* file picker affordance — composed copy on the left, "选择文件" button on the right */
+.settings-file-drop::after {
+  content: '选择文件';
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 14px;
+  border: 1px solid var(--life-line);
+  border-radius: 10px;
+  background: var(--life-panel);
+  color: var(--life-ink);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  grid-column: 2;
+  pointer-events: none;
+}
+
+.settings-file-drop:hover::after {
+  border-color: rgba(15, 118, 110, 0.4);
+  background: var(--life-soft);
+}
+
+.settings-file-hint {
+  display: none;
+}
+
+.settings-field-label > span:first-child {
+  color: var(--life-muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.settings-msg {
+  margin: 0;
+  font-size: 13px;
+}
+
+.settings-msg-ok {
+  color: var(--life-success);
+}
+
+.settings-empty {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  max-width: 42ch;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.settings-empty-title {
+  color: var(--life-ink);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
 }
 
 @media (max-width: 1100px) {
@@ -1742,7 +2580,10 @@ body {
     gap: 6px;
   }
   .calendar-cell {
-    min-height: 72px;
+    min-height: 64px;
+  }
+  .calendar-layout {
+    grid-template-columns: 1fr;
   }
   .day-panel {
     position: static;

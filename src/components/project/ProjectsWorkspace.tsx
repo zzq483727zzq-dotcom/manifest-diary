@@ -57,12 +57,14 @@ export function ProjectsWorkspace() {
     if (filter === 'active') {
       return {
         title: '还没有进行中的项目',
-        body: '把一个想完成的事情变成可执行的项目。',
+        body: '把一个想完成的事情变成可执行的项目，进度、截止与投入都会围绕它汇总。',
+        action: '创建第一个项目',
       };
     }
     return {
-      title: '这个筛选下没有项目',
-      body: '换一个状态看看，或者新建一个项目。',
+      title: '这个筛选下还没有项目',
+      body: '换一个状态看看，或者新建一个项目，让桌面有一个起点。',
+      action: '创建第一个项目',
     };
   }, [filter]);
 
@@ -125,50 +127,70 @@ export function ProjectsWorkspace() {
       {error ? <p className="form-error">{error}</p> : null}
 
       {loading ? (
-        <div className="module-grid">
+        <div className="module-grid projects-grid">
+          <div className="life-card skeleton-card" />
           <div className="life-card skeleton-card" />
           <div className="life-card skeleton-card" />
         </div>
       ) : projects.length === 0 ? (
-        <article className="life-card module-note empty-state">
+        <article className="projects-empty">
+          <span className="projects-empty-mark" aria-hidden />
           <h2>{emptyCopy.title}</h2>
           <p>{emptyCopy.body}</p>
-          <p style={{ marginTop: 16 }}>
-            <button type="button" className="primary-button" onClick={() => setDrawerOpen(true)}>
-              创建第一个项目
-            </button>
-          </p>
+          <button type="button" className="primary-button" onClick={() => setDrawerOpen(true)}>
+            {emptyCopy.action}
+          </button>
         </article>
       ) : (
-        <div className="module-grid">
-          {projects.map((project) => (
-            <button
-              key={project.id}
-              type="button"
-              className="life-card project-card"
-              onClick={() => router.push(`/projects/${project.id}`)}
-            >
-              <div className="project-card-top">
-                <span className="project-color" style={{ background: project.color }} />
-                <span className="status-label">{PROJECT_STATUS_LABELS[project.status]}</span>
-              </div>
-              <h2>{project.name}</h2>
-              {project.description ? <p className="project-desc">{project.description}</p> : null}
-              <div className="project-meta">
-                <span>
-                  进度 {project.task_completed}/{project.task_total} · {Math.round(project.progress * 100)}%
-                </span>
-                <span>
-                  {project.nearest_due_date
-                    ? `最近截止 ${project.nearest_due_date}`
-                    : '无截止日期'}
-                </span>
-              </div>
-              <div className="progress-track">
-                <div className="progress-fill" style={{ width: `${Math.round(project.progress * 100)}%` }} />
-              </div>
-            </button>
-          ))}
+        <div className="module-grid projects-grid">
+          {projects.map((project) => {
+            const pct = Math.round(project.progress * 100);
+            const hasTasks = project.task_total > 0;
+            return (
+              <button
+                key={project.id}
+                type="button"
+                className="life-card project-card"
+                onClick={() => router.push(`/projects/${project.id}`)}
+              >
+                <span className="project-card-rail" style={{ background: project.color }} aria-hidden />
+                <div className="project-card-body">
+                  <div className="project-card-head">
+                    <span className={`project-status-pill project-status-${project.status}`}>
+                      {PROJECT_STATUS_LABELS[project.status]}
+                    </span>
+                    {hasTasks ? (
+                      <span className="project-progress-value" data-progress={pct}>
+                        {pct}%
+                      </span>
+                    ) : null}
+                  </div>
+                  <h2 className="project-card-name">{project.name}</h2>
+                  {project.description ? <p className="project-desc">{project.description}</p> : null}
+                  <div className="progress-track" aria-hidden>
+                    <div
+                      className="progress-fill"
+                      style={{ width: `${hasTasks ? pct : 0}%` }}
+                    />
+                  </div>
+                  <div className="project-meta">
+                    <span className="project-meta-cell">
+                      <span className="project-meta-label">进度</span>
+                      <span className="project-meta-value">
+                        {project.task_completed}/{project.task_total} 个任务
+                      </span>
+                    </span>
+                    <span className="project-meta-cell project-meta-due">
+                      <span className="project-meta-label">最近截止</span>
+                      <span className="project-meta-value project-meta-due-value">
+                        {project.nearest_due_date ? project.nearest_due_date : '暂无日期'}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
 

@@ -237,6 +237,15 @@ export function ProjectBoard({
                       </div>
                     </article>
                   ))}
+                  {columnTasks.length === 0 ? (
+                    <p className="board-empty">
+                      {status === 'todo'
+                        ? '这里干净。把下一步要推进的事记进来。'
+                        : status === 'in_progress'
+                          ? '还没有正在做的事。点一张卡的标签把它切到进行中。'
+                          : '完成的事情会收在这里，点标签能循环回待办。'}
+                    </p>
+                  ) : null}
                   {status === 'completed' && columnTasks.length > 5 ? (
                     <button
                       type="button"
