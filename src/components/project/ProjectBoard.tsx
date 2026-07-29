@@ -162,83 +162,105 @@ export function ProjectBoard({
   }
 
   return (
-    <div className="module-page project-detail-page">
-      <header className="module-header project-detail-header">
-        <div>
-          <Link href="/projects" className="back-link">
+    <div className="pb">
+      <header className="pb-hero">
+        <div className="pb-hero-text">
+          <Link href="/projects" className="pb-back">
             返回项目
           </Link>
           <h1>{project.name}</h1>
-          <p>
-            {PROJECT_STATUS_LABELS[project.status]} · 进度 {project.task_completed}/{project.task_total} · 累计{' '}
-            {formatMinutes(project.minutes_total)}
-          </p>
-          {project.description ? <p>{project.description}</p> : null}
+          <div className="pb-hero-meta">
+            <span className="pb-chip">{PROJECT_STATUS_LABELS[project.status]}</span>
+            <span className="pb-stat">
+              进度<em>{project.task_completed}/{project.task_total}</em>
+            </span>
+            <span className="pb-stat">
+              累计<em>{formatMinutes(project.minutes_total)}</em>
+            </span>
+          </div>
+          {project.description ? <p className="pb-desc">{project.description}</p> : null}
         </div>
-        <div className="project-detail-actions">
-          <div className="filter-row compact">
+        <div className="pb-hero-actions">
+          <div className="pb-view-toggle" role="group" aria-label="切换视图">
             <button
               type="button"
-              className={view === 'board' ? 'filter-chip active' : 'filter-chip'}
+              className={view === 'board' ? 'pb-view active' : 'pb-view'}
+              aria-pressed={view === 'board'}
               onClick={() => setView('board')}
             >
               看板
             </button>
             <button
               type="button"
-              className={view === 'list' ? 'filter-chip active' : 'filter-chip'}
+              className={view === 'list' ? 'pb-view active' : 'pb-view'}
+              aria-pressed={view === 'list'}
               onClick={() => setView('list')}
             >
               列表
             </button>
           </div>
-          <button type="button" className="primary-button" onClick={() => setCreateOpen(true)}>
+          <button type="button" className="primary-button pb-new" onClick={() => setCreateOpen(true)}>
             新建任务
           </button>
         </div>
       </header>
 
       {view === 'board' ? (
-        <div className="board-grid">
+        <section className="pb-board" aria-label="任务看板">
           {COLUMNS.map((status) => {
             const columnTasks = grouped[status];
             const visible =
               status === 'completed' && !expandedCompleted ? columnTasks.slice(0, 5) : columnTasks;
+            const tone =
+              status === 'in_progress' ? 'accent' : status === 'completed' ? 'done' : 'neutral';
             return (
-              <section key={status} className="board-column">
-                <div className="board-column-head">
-                  <strong>{TASK_STATUS_LABELS[status]}</strong>
-                  <span>{columnTasks.length}</span>
-                </div>
-                <div className="board-column-body">
-                  {visible.map((task) => (
-                    <article key={task.id} className="task-card">
-                      <div className="task-card-top">
+              <section key={status} className={`pb-col tone-${tone}`} aria-label={TASK_STATUS_LABELS[status]}>
+                <header className="pb-col-h">
+                  <h2>
+                    <i className={`pb-pip tone-${tone}`} aria-hidden />
+                    {TASK_STATUS_LABELS[status]}
+                  </h2>
+                  <span className="pb-count">{columnTasks.length}</span>
+                </header>
+                <div className="pb-col-body">
+                  {visible.map((task) => {
+                    const overdue =
+                      task.due_date && task.status !== 'completed' && task.due_date < todayLocal();
+                    return (
+                      <article key={task.id} className={`pb-card${overdue ? ' is-over' : ''}`}>
                         <button
                           type="button"
-                          className={`status-pill status-${task.status}`}
+                          className={`pb-status tone-${task.status}`}
                           onClick={() => void cycleStatus(task)}
                           title="点击循环：待办 → 进行中 → 已完成"
                         >
                           {TASK_STATUS_LABELS[task.status]}
                         </button>
-                        <button type="button" className="task-title-btn" onClick={() => openTask(task.id)}>
+                        <button type="button" className="pb-title" onClick={() => openTask(task.id)}>
                           {task.title}
                         </button>
-                      </div>
-                      <div className="task-card-meta">
-                        <span className={`priority-dot ${task.priority}`} />
-                        {TASK_PRIORITY_LABELS[task.priority]}
-                        {task.due_date ? ` · ${task.due_date}` : ''}
-                        {task.subtask_total > 0
-                          ? ` · 子任务 ${task.subtask_done}/${task.subtask_total}`
-                          : ''}
-                        {task.minutes_total > 0 ? ` · ${formatMinutes(task.minutes_total)}` : ''}
-                      </div>
-                    </article>
-                  ))}
+                        <div className="pb-meta">
+                          <i className={`pb-pdot ${task.priority}`} aria-hidden />
+                          <span className="pb-meta-pri">{TASK_PRIORITY_LABELS[task.priority]}</span>
+                          {task.due_date ? (
+                            <span className={`pb-meta-date${overdue ? ' is-over' : ''}`}>
+                              {task.due_date}
+                            </span>
+                          ) : null}
+                          {task.subtask_total > 0 ? (
+                            <span className="pb-meta-sub">
+                              子任务 {task.subtask_done}/{task.subtask_total}
+                            </span>
+                          ) : null}
+                          {task.minutes_total > 0 ? (
+                            <span className="pb-meta-min">{formatMinutes(task.minutes_total)}</span>
+                          ) : null}
+                        </div>
+                      </article>
+                    );
+                  })}
                   {columnTasks.length === 0 ? (
-                    <p className="board-empty">
+                    <p className="pb-empty">
                       {status === 'todo'
                         ? '这里干净。把下一步要推进的事记进来。'
                         : status === 'in_progress'
@@ -249,7 +271,7 @@ export function ProjectBoard({
                   {status === 'completed' && columnTasks.length > 5 ? (
                     <button
                       type="button"
-                      className="text-button"
+                      className="pb-more"
                       onClick={() => setExpandedCompleted((value) => !value)}
                     >
                       {expandedCompleted ? '收起已完成' : `展开全部 ${columnTasks.length} 条`}
@@ -259,10 +281,10 @@ export function ProjectBoard({
               </section>
             );
           })}
-        </div>
+        </section>
       ) : (
-        <div className="life-card list-panel">
-          <div className="filter-row">
+        <section className="pb-list" aria-label="任务列表">
+          <div className="pb-list-filters">
             {[
               ['all', '全部'],
               ['open', '未完成'],
@@ -271,38 +293,47 @@ export function ProjectBoard({
               <button
                 key={key}
                 type="button"
-                className={listFilter === key ? 'filter-chip active' : 'filter-chip'}
+                className={listFilter === key ? 'pb-filter active' : 'pb-filter'}
+                aria-pressed={listFilter === key}
                 onClick={() => setListFilter(key as typeof listFilter)}
               >
                 {label}
               </button>
             ))}
           </div>
-          <div className="task-table">
-            {listTasksView.map((task) => (
-              <div key={task.id} className="task-row">
-                <button
-                  type="button"
-                  className={`status-pill status-${task.status}`}
-                  onClick={() => void cycleStatus(task)}
-                  title="点击循环：待办 → 进行中 → 已完成"
-                >
-                  {TASK_STATUS_LABELS[task.status]}
-                </button>
-                <button type="button" className="task-title-btn" onClick={() => openTask(task.id)}>
-                  {task.title}
-                </button>
-                <span>
-                  <i className={`priority-dot ${task.priority}`} /> {TASK_PRIORITY_LABELS[task.priority]}
-                </span>
-                <span>{task.due_date || '—'}</span>
-                <span>{TASK_STATUS_LABELS[task.status]}</span>
-                <span>{formatMinutes(task.minutes_total)}</span>
-              </div>
-            ))}
-            {listTasksView.length === 0 ? <p className="muted">这个筛选下没有任务。</p> : null}
+          <div className="pb-list-rows">
+            {listTasksView.map((task) => {
+              const overdue =
+                task.due_date && task.status !== 'completed' && task.due_date < todayLocal();
+              return (
+                <div key={task.id} className="pb-list-row">
+                  <button
+                    type="button"
+                    className={`pb-status sm tone-${task.status}`}
+                    onClick={() => void cycleStatus(task)}
+                    title="点击循环：待办 → 进行中 → 已完成"
+                  >
+                    {TASK_STATUS_LABELS[task.status]}
+                  </button>
+                  <button type="button" className="pb-title sm" onClick={() => openTask(task.id)}>
+                    {task.title}
+                  </button>
+                  <span className={`pb-list-pri tone-${task.priority}`}>
+                    <i className={`pb-pdot ${task.priority}`} aria-hidden />
+                    {TASK_PRIORITY_LABELS[task.priority]}
+                  </span>
+                  <span className={`pb-list-date${overdue ? ' is-over' : ''}`}>
+                    {task.due_date || '—'}
+                  </span>
+                  <span className="pb-list-min">
+                    {task.minutes_total > 0 ? formatMinutes(task.minutes_total) : '—'}
+                  </span>
+                </div>
+              );
+            })}
+            {listTasksView.length === 0 ? <p className="pb-empty line">这个筛选下没有任务。</p> : null}
           </div>
-        </div>
+        </section>
       )}
 
       {createOpen ? (
