@@ -1,0 +1,15 @@
+{
+  "provider": "OpenAI-compatible",
+  "name": "tokenx24",
+  "base_url": "https://tokenx24.com/v1",
+  "image_model": "gpt-image-2",
+  "chat_model": "gpt-5.5",
+  "default_size": "1536x1024",
+  "default_quality": "medium",
+  "auth": {
+    "type": "bearer_env",
+    "env": "OPENAI_API_KEY",
+    "note": "Key lives in image.local.env (gitignored) or process env. Codex auth mirror: %USERPROFILE%\\.codex\\auth.json"
+  },
+  "wire_notes": "Codex uses wire_api=responses for chat; image generations use POST {base_url}/images/generations with model gpt-image-2."
+}

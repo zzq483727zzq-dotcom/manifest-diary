@@ -41,6 +41,13 @@ yarn-error.log*
 .env*
 !.env.example
 
+# local image-gen secrets / temp comps
+.impeccable/image.local.env
+.impeccable/mocks/
+.impeccable/qa/
+.impeccable/hook.cache.json
+data-test-project/
+
 # vercel
 .vercel
 
