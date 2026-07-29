@@ -27,6 +27,7 @@ describe('project repository', () => {
       description: '',
       color: '#5EEAD4',
       target_date: null,
+      start_date: null,
     });
 
     const task = createTask({
@@ -72,6 +73,7 @@ describe('project repository', () => {
       description: '',
       color: '#7DD3FC',
       target_date: null,
+      start_date: null,
     });
     const task = createTask({
       project_id: project.id,
@@ -104,6 +106,7 @@ describe('project repository', () => {
       description: '',
       color: '#C4B5FD',
       target_date: null,
+      start_date: null,
     });
 
     createTask({
@@ -161,6 +164,7 @@ describe('project repository', () => {
       description: '',
       color: '#FBBF24',
       target_date: null,
+      start_date: null,
     });
     const task = createTask({
       project_id: project.id,

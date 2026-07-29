@@ -84,7 +84,28 @@ function migrate() {
       ON time_entries(task_id, logged_date);
     CREATE INDEX IF NOT EXISTS idx_time_entries_logged_date
       ON time_entries(logged_date);
+
+    CREATE TABLE IF NOT EXISTS project_time_entries (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      minutes INTEGER NOT NULL,
+      logged_date TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_time_project
+      ON project_time_entries(project_id, logged_date);
   `);
+
+  // Additive column migration: start_date on projects (older dbs predate it).
+  {
+    const cols = localDb.prepare('PRAGMA table_info(projects)').all() as { name: string }[];
+    if (!cols.some((c) => c.name === 'start_date')) {
+      localDb.exec('ALTER TABLE projects ADD COLUMN start_date TEXT');
+    }
+  }
 
   // Drop legacy local business tables from previous product lines.
   localDb.exec(`

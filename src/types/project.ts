@@ -19,6 +19,7 @@ export interface Project {
   description: string;
   color: ProjectColor;
   target_date: string | null;
+  start_date: string | null;
   status: ProjectStatus;
   created_at: string;
   updated_at: string;
@@ -52,6 +53,16 @@ export interface Subtask {
 export interface TimeEntry {
   id: string;
   task_id: string;
+  minutes: number;
+  logged_date: string;
+  note: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectTimeEntry {
+  id: string;
+  project_id: string;
   minutes: number;
   logged_date: string;
   note: string;

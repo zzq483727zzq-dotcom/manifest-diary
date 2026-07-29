@@ -32,6 +32,9 @@ export function ProjectsWorkspace() {
   const [description, setDescription] = useState('');
   const [color, setColor] = useState<ProjectColor>(PROJECT_COLORS[0]);
   const [targetDate, setTargetDate] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [menuId, setMenuId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function load(nextFilter = filter) {
     setLoading(true);
@@ -81,6 +84,7 @@ export function ProjectsWorkspace() {
           description,
           color,
           target_date: targetDate || null,
+          start_date: startDate || null,
         }),
       });
       const body = await res.json();
@@ -90,6 +94,7 @@ export function ProjectsWorkspace() {
       setDescription('');
       setColor(PROJECT_COLORS[0]);
       setTargetDate('');
+      setStartDate('');
       router.push(`/projects/${body.project.id}`);
       router.refresh();
     } catch (err) {
@@ -98,6 +103,36 @@ export function ProjectsWorkspace() {
       setSaving(false);
     }
   }
+
+  async function deleteProject(project: ProjectSummary) {
+    if (!window.confirm(`确定删除项目「${project.name}」吗？项目下的任务、子任务和耗时记录都会一起删除，且无法撤销。`)) {
+      return;
+    }
+    setDeletingId(project.id);
+    setMenuId(null);
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || '删除失败');
+      await load(filter);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除失败');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  useEffect(() => {
+    if (menuId == null) return;
+    const close = () => setMenuId(null);
+    window.addEventListener('click', close);
+    window.addEventListener('focus', close, true);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('focus', close, true);
+    };
+  }, [menuId]);
 
   return (
     <div className="module-page">
@@ -146,12 +181,20 @@ export function ProjectsWorkspace() {
           {projects.map((project) => {
             const pct = Math.round(project.progress * 100);
             const hasTasks = project.task_total > 0;
+            const menuOpen = menuId === project.id;
             return (
-              <button
+              <div
                 key={project.id}
-                type="button"
                 className="life-card project-card"
+                role="button"
+                tabIndex={0}
                 onClick={() => router.push(`/projects/${project.id}`)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    router.push(`/projects/${project.id}`);
+                  }
+                }}
               >
                 <span className="project-card-rail" style={{ background: project.color }} aria-hidden />
                 <div className="project-card-body">
@@ -159,11 +202,48 @@ export function ProjectsWorkspace() {
                     <span className={`project-status-pill project-status-${project.status}`}>
                       {PROJECT_STATUS_LABELS[project.status]}
                     </span>
-                    {hasTasks ? (
-                      <span className="project-progress-value" data-progress={pct}>
-                        {pct}%
-                      </span>
-                    ) : null}
+                    <div className="project-card-head-right">
+                      {hasTasks ? (
+                        <span className="project-progress-value" data-progress={pct}>
+                          {pct}%
+                        </span>
+                      ) : null}
+                      <div className="project-card-menu">
+                        <button
+                          type="button"
+                          className="project-card-menu-trigger"
+                          aria-label="项目菜单"
+                          aria-haspopup="menu"
+                          aria-expanded={menuOpen}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setMenuId(menuOpen ? null : project.id);
+                          }}
+                        >
+                          ⋯
+                        </button>
+                        {menuOpen ? (
+                          <div
+                            className="project-card-menu-pop"
+                            role="menu"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              className="project-card-menu-item danger-text"
+                              role="menuitem"
+                              disabled={deletingId === project.id}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void deleteProject(project);
+                              }}
+                            >
+                              {deletingId === project.id ? '删除中…' : '删除项目'}
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
                   <h2 className="project-card-name">{project.name}</h2>
                   {project.description ? <p className="project-desc">{project.description}</p> : null}
@@ -188,7 +268,7 @@ export function ProjectsWorkspace() {
                     </span>
                   </div>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
@@ -249,6 +329,14 @@ export function ProjectsWorkspace() {
                   ))}
                 </div>
               </div>
+              <label>
+                开始日期（可选）
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </label>
               <label>
                 目标日期（可选）
                 <input

@@ -30,6 +30,7 @@ export interface ProjectInput {
   description: string;
   color: ProjectColor;
   target_date: string | null;
+  start_date: string | null;
 }
 
 export interface TaskInput {
@@ -52,6 +53,28 @@ export interface TimeEntryInput {
   note: string;
 }
 
+export interface ProjectTimeEntryInput {
+  minutes: number;
+  logged_date: string;
+  note: string;
+}
+
+// Alongside task-level minutes, projects can record time directly (not tied to a task).
+function parseMinutesAndDate(raw: Record<string, unknown>, today: string) {
+  const minutes = Number(raw.minutes);
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) {
+    throw new Error('耗时需为 1–1440 的整数分钟');
+  }
+  const logged_date = optionalDate(raw.logged_date ?? today, '记录日期');
+  if (!logged_date) throw new Error('请填写记录日期');
+  if (logged_date > today) throw new Error('不能记录未来日期的耗时');
+  return {
+    minutes,
+    logged_date,
+    note: trimString(raw.note ?? '', '备注', 0, 200, false),
+  };
+}
+
 export function parseProjectInput(raw: unknown): ProjectInput {
   const input = asObject(raw);
   const name = trimString(input.name, '项目名称', 1, 80);
@@ -63,6 +86,7 @@ export function parseProjectInput(raw: unknown): ProjectInput {
     description,
     color: color as ProjectColor,
     target_date: optionalDate(input.target_date, '目标日期'),
+    start_date: optionalDate(input.start_date, '开始日期'),
   };
 }
 
@@ -117,19 +141,11 @@ export function parseSubtaskInput(raw: unknown): SubtaskInput {
 }
 
 export function parseTimeEntryInput(raw: unknown, today: string): TimeEntryInput {
-  const input = asObject(raw);
-  const minutes = Number(input.minutes);
-  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) {
-    throw new Error('耗时需为 1–1440 的整数分钟');
-  }
-  const logged_date = optionalDate(input.logged_date ?? today, '记录日期');
-  if (!logged_date) throw new Error('请填写记录日期');
-  if (logged_date > today) throw new Error('不能记录未来日期的耗时');
-  return {
-    minutes,
-    logged_date,
-    note: trimString(input.note ?? '', '备注', 0, 200, false),
-  };
+  return parseMinutesAndDate(asObject(raw), today);
+}
+
+export function parseProjectTimeEntryInput(raw: unknown, today: string): ProjectTimeEntryInput {
+  return parseMinutesAndDate(asObject(raw), today);
 }
 
 export function parseProjectStatus(value: unknown): ProjectStatus {

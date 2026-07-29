@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type {
   ProjectSummary,
+  ProjectTimeEntry,
   Subtask,
   TaskPriority,
   TaskStatus,
@@ -62,6 +63,9 @@ export function ProjectBoard({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [expandedCompleted, setExpandedCompleted] = useState(false);
+  const [timeOpen, setTimeOpen] = useState(false);
+  const [deletingProject, setDeletingProject] = useState(false);
+  const [projectMinutes, setProjectMinutes] = useState(0);
 
   useEffect(() => {
     const stored = window.localStorage.getItem('clarity-project-view');
@@ -75,6 +79,10 @@ export function ProjectBoard({
   useEffect(() => {
     if (initialTaskId) setDrawerTaskId(initialTaskId);
   }, [initialTaskId]);
+
+  useEffect(() => {
+    setProjectMinutes(project.minutes_total);
+  }, [project.minutes_total]);
 
   const grouped = useMemo(() => {
     const map: Record<TaskStatus, TaskWithMeta[]> = {
@@ -161,6 +169,32 @@ export function ProjectBoard({
     router.replace(`/projects/${project.id}`);
   }
 
+  async function deleteProject() {
+    if (
+      !window.confirm(
+        `确定删除项目「${project.name}」吗？项目下的任务、子任务和全部耗时记录都会一起删除，且无法撤销。`,
+      )
+    ) {
+      return;
+    }
+    setDeletingProject(true);
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || '删除失败');
+      router.replace('/projects');
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除失败');
+    } finally {
+      setDeletingProject(false);
+    }
+  }
+
+  function refreshProjectMinutes(total: number) {
+    setProjectMinutes(total);
+  }
+
   return (
     <div className="pb">
       <header className="pb-hero">
@@ -175,8 +209,18 @@ export function ProjectBoard({
               进度<em>{project.task_completed}/{project.task_total}</em>
             </span>
             <span className="pb-stat">
-              累计<em>{formatMinutes(project.minutes_total)}</em>
+              累计<em>{formatMinutes(projectMinutes)}</em>
             </span>
+            {project.start_date ? (
+              <span className="pb-stat">
+                开始<em>{project.start_date}</em>
+              </span>
+            ) : null}
+            {project.target_date ? (
+              <span className={`pb-stat${project.target_date < todayLocal() && project.status !== 'completed' ? ' is-over' : ''}`}>
+                截止<em>{project.target_date}</em>
+              </span>
+            ) : null}
           </div>
           {project.description ? <p className="pb-desc">{project.description}</p> : null}
         </div>
@@ -199,11 +243,36 @@ export function ProjectBoard({
               列表
             </button>
           </div>
+          <button
+            type="button"
+            className={timeOpen ? 'pb-ghost active' : 'pb-ghost'}
+            aria-pressed={timeOpen}
+            onClick={() => setTimeOpen((value) => !value)}
+          >
+            记录耗时
+          </button>
           <button type="button" className="primary-button pb-new" onClick={() => setCreateOpen(true)}>
             新建任务
           </button>
+          <button
+            type="button"
+            className="pb-ghost danger-ghost"
+            disabled={deletingProject}
+            onClick={() => void deleteProject()}
+          >
+            {deletingProject ? '删除中…' : '删除项目'}
+          </button>
         </div>
       </header>
+
+      {timeOpen ? (
+        <ProjectTimeSection
+          projectId={project.id}
+          readOnly={project.status === 'archived'}
+          onChanged={() => router.refresh()}
+          onMinutesChange={refreshProjectMinutes}
+        />
+      ) : null}
 
       {view === 'board' ? (
         <section className="pb-board" aria-label="任务看板">
@@ -382,6 +451,177 @@ export function ProjectBoard({
         />
       ) : null}
     </div>
+  );
+}
+
+// 项目级耗时：不依附任何任务，直接记在项目上。
+function ProjectTimeSection({
+  projectId,
+  readOnly,
+  onChanged,
+  onMinutesChange,
+}: {
+  projectId: string;
+  readOnly: boolean;
+  onChanged: () => void;
+  onMinutesChange: (total: number) => void;
+}) {
+  const [entries, setEntries] = useState<ProjectTimeEntry[]>([]);
+  const [minutes, setMinutes] = useState('30');
+  const [date, setDate] = useState(localDateString());
+  const [note, setNote] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [error, setError] = useState('');
+
+  async function load() {
+    const res = await fetch(`/api/projects/${projectId}/time-entries`);
+    const body = await res.json();
+    if (!res.ok) {
+      setError(body.error || '加载耗时失败');
+      return;
+    }
+    setEntries(body.timeEntries ?? []);
+    const total = (body.timeEntries ?? []).reduce((sum: number, item: ProjectTimeEntry) => sum + item.minutes, 0);
+    onMinutesChange(total);
+  }
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    if (readOnly) return;
+    setError('');
+    const payload = {
+      minutes: Number(minutes),
+      logged_date: date,
+      note,
+    };
+    const res = await fetch(
+      editingId ? `/api/project-time-entries/${editingId}` : `/api/projects/${projectId}/time-entries`,
+      {
+        method: editingId ? 'PATCH' : 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+    );
+    const body = await res.json();
+    if (!res.ok) {
+      setError(body.error || '保存耗时失败');
+      return;
+    }
+    setMinutes('30');
+    setDate(localDateString());
+    setNote('');
+    setEditingId(null);
+    await load();
+    onChanged();
+  }
+
+  function startEdit(entry: ProjectTimeEntry) {
+    setEditingId(entry.id);
+    setMinutes(String(entry.minutes));
+    setDate(entry.logged_date);
+    setNote(entry.note || '');
+  }
+
+  async function remove(entryId: string) {
+    if (readOnly) return;
+    if (!window.confirm('确定删除这条耗时记录吗？')) return;
+    const res = await fetch(`/api/project-time-entries/${entryId}`, { method: 'DELETE' });
+    if (!res.ok) return;
+    await load();
+    onChanged();
+  }
+
+  return (
+    <section className="pb-time">
+      <div className="pb-time-head">
+        <strong>项目耗时</strong>
+        <span className="muted">不归属任何任务，直接记在项目上</span>
+      </div>
+      <div className="pb-time-list">
+        {entries.map((entry) => (
+          <div key={entry.id} className="pb-time-row">
+            <div>
+              <strong>{formatMinutes(entry.minutes)}</strong>
+              <span className="muted"> · {entry.logged_date}</span>
+              {entry.note ? <p className="muted">{entry.note}</p> : null}
+            </div>
+            {!readOnly ? (
+              <div className="subtask-actions">
+                <button type="button" className="text-button" onClick={() => startEdit(entry)}>
+                  编辑
+                </button>
+                <button
+                  type="button"
+                  className="text-button danger-text"
+                  onClick={() => void remove(entry.id)}
+                >
+                  删除
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ))}
+        {entries.length === 0 ? <p className="muted line">还没有项目级耗时。记录一段不依附任何任务的投入。</p> : null}
+      </div>
+      {readOnly ? (
+        <p className="muted">已归档项目为只读。</p>
+      ) : (
+        <form className="stack-form compact" onSubmit={save}>
+          <div className="meta-grid">
+            <label>
+              分钟
+              <input
+                type="number"
+                min={1}
+                max={1440}
+                value={minutes}
+                onChange={(e) => setMinutes(e.target.value)}
+                required
+              />
+            </label>
+            <label>
+              日期
+              <input
+                type="date"
+                value={date}
+                max={localDateString()}
+                onChange={(e) => setDate(e.target.value)}
+                required
+              />
+            </label>
+          </div>
+          <label>
+            备注
+            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="可选" />
+          </label>
+          <div className="inline-actions">
+            <button type="submit" className="secondary-button">
+              {editingId ? '更新耗时' : '添加耗时'}
+            </button>
+            {editingId ? (
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => {
+                  setEditingId(null);
+                  setMinutes('30');
+                  setDate(localDateString());
+                  setNote('');
+                }}
+              >
+                取消编辑
+              </button>
+            ) : null}
+          </div>
+          {error ? <p className="form-error">{error}</p> : null}
+        </form>
+      )}
+    </section>
   );
 }
 

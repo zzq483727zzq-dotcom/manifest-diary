@@ -5,6 +5,7 @@ import type {
   ProjectColor,
   ProjectStatus,
   ProjectSummary,
+  ProjectTimeEntry,
   Subtask,
   Task,
   TaskPriority,
@@ -12,12 +13,19 @@ import type {
   TaskWithMeta,
   TimeEntry,
 } from '@/types/project';
-import type { ProjectInput, SubtaskInput, TaskInput, TimeEntryInput } from '@/lib/project/validation';
+import type {
+  ProjectInput,
+  ProjectTimeEntryInput,
+  SubtaskInput,
+  TaskInput,
+  TimeEntryInput,
+} from '@/lib/project/validation';
 
 type ProjectRow = Omit<Project, 'color'> & { color: string };
 type TaskRow = Task;
 type SubtaskRow = Omit<Subtask, 'is_done'> & { is_done: number };
 type TimeEntryRow = TimeEntry;
+type ProjectTimeEntryRow = ProjectTimeEntry;
 
 function mapProject(row: ProjectRow): Project {
   return { ...row, color: row.color as ProjectColor };
@@ -39,10 +47,15 @@ export function listProjects(status?: ProjectStatus | 'all'): ProjectSummary[] {
             `SELECT p.*,
               (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) AS task_total,
               (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.status = 'completed') AS task_completed,
-              (SELECT COALESCE(SUM(te.minutes), 0)
-                 FROM time_entries te
-                 JOIN tasks t ON t.id = te.task_id
-                WHERE t.project_id = p.id) AS minutes_total,
+              (
+                (SELECT COALESCE(SUM(te.minutes), 0)
+                   FROM time_entries te
+                   JOIN tasks t ON t.id = te.task_id
+                  WHERE t.project_id = p.id)
+                + (SELECT COALESCE(SUM(pte.minutes), 0)
+                   FROM project_time_entries pte
+                  WHERE pte.project_id = p.id)
+              ) AS minutes_total,
               (SELECT MIN(t.due_date)
                  FROM tasks t
                 WHERE t.project_id = p.id
@@ -58,10 +71,15 @@ export function listProjects(status?: ProjectStatus | 'all'): ProjectSummary[] {
             `SELECT p.*,
               (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) AS task_total,
               (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.status = 'completed') AS task_completed,
-              (SELECT COALESCE(SUM(te.minutes), 0)
-                 FROM time_entries te
-                 JOIN tasks t ON t.id = te.task_id
-                WHERE t.project_id = p.id) AS minutes_total,
+              (
+                (SELECT COALESCE(SUM(te.minutes), 0)
+                   FROM time_entries te
+                   JOIN tasks t ON t.id = te.task_id
+                  WHERE t.project_id = p.id)
+                + (SELECT COALESCE(SUM(pte.minutes), 0)
+                   FROM project_time_entries pte
+                  WHERE pte.project_id = p.id)
+              ) AS minutes_total,
               (SELECT MIN(t.due_date)
                  FROM tasks t
                 WHERE t.project_id = p.id
@@ -108,10 +126,10 @@ export function createProject(input: ProjectInput): Project {
   const at = nowIso();
   localDb
     .prepare(
-      `INSERT INTO projects(id,name,description,color,target_date,status,created_at,updated_at,completed_at)
-       VALUES(?,?,?,?,?,'active',?,?,NULL)`,
+      `INSERT INTO projects(id,name,description,color,target_date,start_date,status,created_at,updated_at,completed_at)
+       VALUES(?,?,?,?,?,?,'active',?,?,NULL)`,
     )
-    .run(id, input.name, input.description, input.color, input.target_date, at, at);
+    .run(id, input.name, input.description, input.color, input.target_date, input.start_date, at, at);
   return getProject(id)!;
 }
 
@@ -122,10 +140,10 @@ export function updateProject(id: string, input: ProjectInput): Project {
   localDb
     .prepare(
       `UPDATE projects
-          SET name = ?, description = ?, color = ?, target_date = ?, updated_at = ?
+          SET name = ?, description = ?, color = ?, target_date = ?, start_date = ?, updated_at = ?
         WHERE id = ?`,
     )
-    .run(input.name, input.description, input.color, input.target_date, at, id);
+    .run(input.name, input.description, input.color, input.target_date, input.start_date, at, id);
   return getProject(id)!;
 }
 
@@ -290,6 +308,32 @@ export function deleteTask(id: string) {
   }
 }
 
+export function deleteProject(id: string) {
+  const existing = getProject(id);
+  if (!existing) throw new Error('项目不存在');
+  const at = nowIso();
+  localDb.exec('BEGIN');
+  try {
+    const taskIds = localDb
+      .prepare('SELECT id FROM tasks WHERE project_id = ?')
+      .all(id)
+      .map((row) => (row as { id: string }).id);
+    for (const taskId of taskIds) {
+      localDb.prepare('DELETE FROM time_entries WHERE task_id = ?').run(taskId);
+      localDb.prepare('DELETE FROM subtasks WHERE task_id = ?').run(taskId);
+    }
+    localDb.prepare('DELETE FROM tasks WHERE project_id = ?').run(id);
+    localDb.prepare('DELETE FROM project_time_entries WHERE project_id = ?').run(id);
+    localDb.prepare('DELETE FROM projects WHERE id = ?').run(id);
+    // 触摸已无意义（项目已删），保持事务一致性不保留 touchProject 调用
+    localDb.exec('COMMIT');
+  } catch (error) {
+    localDb.exec('ROLLBACK');
+    throw error;
+  }
+  void at;
+}
+
 export function listSubtasks(taskId: string): Subtask[] {
   const rows = localDb
     .prepare('SELECT * FROM subtasks WHERE task_id = ? ORDER BY position ASC, created_at ASC')
@@ -433,6 +477,65 @@ export function deleteTimeEntry(id: string) {
   const at = nowIso();
   localDb.prepare('DELETE FROM time_entries WHERE id = ?').run(id);
   touchProject(task.project_id, at);
+}
+
+// --- 项目级耗时（不依附任何任务，直接记在项目上） ---
+
+export function listProjectTimeEntries(projectId: string): ProjectTimeEntry[] {
+  return localDb
+    .prepare('SELECT * FROM project_time_entries WHERE project_id = ? ORDER BY logged_date DESC, created_at DESC')
+    .all(projectId) as ProjectTimeEntryRow[];
+}
+
+export function createProjectTimeEntry(projectId: string, input: ProjectTimeEntryInput): ProjectTimeEntry {
+  const project = getProject(projectId);
+  if (!project) throw new Error('项目不存在');
+  if (project.status === 'archived') throw new Error('已归档项目不能记录耗时');
+
+  const id = randomUUID();
+  const at = nowIso();
+  localDb
+    .prepare(
+      `INSERT INTO project_time_entries(id,project_id,minutes,logged_date,note,created_at,updated_at)
+       VALUES(?,?,?,?,?,?,?)`,
+    )
+    .run(id, projectId, input.minutes, input.logged_date, input.note, at, at);
+  touchProject(projectId, at);
+  return localDb.prepare('SELECT * FROM project_time_entries WHERE id = ?').get(id) as ProjectTimeEntry;
+}
+
+export function updateProjectTimeEntry(id: string, input: ProjectTimeEntryInput): ProjectTimeEntry {
+  const row = localDb
+    .prepare('SELECT * FROM project_time_entries WHERE id = ?')
+    .get(id) as ProjectTimeEntryRow | undefined;
+  if (!row) throw new Error('耗时记录不存在');
+  const project = getProject(row.project_id);
+  if (!project) throw new Error('项目不存在');
+  if (project.status === 'archived') throw new Error('已归档项目不能修改耗时');
+
+  const at = nowIso();
+  localDb
+    .prepare(
+      `UPDATE project_time_entries
+          SET minutes = ?, logged_date = ?, note = ?, updated_at = ?
+        WHERE id = ?`,
+    )
+    .run(input.minutes, input.logged_date, input.note, at, id);
+  touchProject(row.project_id, at);
+  return localDb.prepare('SELECT * FROM project_time_entries WHERE id = ?').get(id) as ProjectTimeEntry;
+}
+
+export function deleteProjectTimeEntry(id: string) {
+  const row = localDb
+    .prepare('SELECT * FROM project_time_entries WHERE id = ?')
+    .get(id) as ProjectTimeEntryRow | undefined;
+  if (!row) throw new Error('耗时记录不存在');
+  const project = getProject(row.project_id);
+  if (!project) throw new Error('项目不存在');
+  if (project.status === 'archived') throw new Error('已归档项目不能删除耗时');
+  const at = nowIso();
+  localDb.prepare('DELETE FROM project_time_entries WHERE id = ?').run(id);
+  touchProject(row.project_id, at);
 }
 
 export function moveTaskPosition(taskId: string, direction: 'up' | 'down'): TaskWithMeta {
@@ -604,6 +707,7 @@ export interface BackupPayload {
   tasks: Task[];
   subtasks: Subtask[];
   timeEntries: TimeEntry[];
+  projectTimeEntries?: ProjectTimeEntry[];
 }
 
 export function exportBackup(): BackupPayload {
@@ -613,6 +717,9 @@ export function exportBackup(): BackupPayload {
   const timeEntries = localDb
     .prepare('SELECT * FROM time_entries ORDER BY created_at ASC')
     .all() as TimeEntryRow[];
+  const projectTimeEntries = localDb
+    .prepare('SELECT * FROM project_time_entries ORDER BY created_at ASC')
+    .all() as ProjectTimeEntryRow[];
   return {
     version: 1,
     exported_at: nowIso(),
@@ -620,6 +727,7 @@ export function exportBackup(): BackupPayload {
     tasks,
     subtasks: subtasks.map(mapSubtask),
     timeEntries,
+    projectTimeEntries,
   };
 }
 
@@ -628,6 +736,7 @@ export function importBackup(payload: BackupPayload): {
   tasks: number;
   subtasks: number;
   timeEntries: number;
+  projectTimeEntries: number;
 } {
   if (!payload || payload.version !== 1) throw new Error('备份格式不支持');
   if (!Array.isArray(payload.projects) || !Array.isArray(payload.tasks)) {
@@ -639,13 +748,14 @@ export function importBackup(payload: BackupPayload): {
     for (const project of payload.projects) {
       localDb
         .prepare(
-          `INSERT INTO projects(id,name,description,color,target_date,status,created_at,updated_at,completed_at)
-           VALUES(?,?,?,?,?,?,?,?,?)
+          `INSERT INTO projects(id,name,description,color,target_date,start_date,status,created_at,updated_at,completed_at)
+           VALUES(?,?,?,?,?,?,?,?,?,?)
            ON CONFLICT(id) DO UPDATE SET
              name=excluded.name,
              description=excluded.description,
              color=excluded.color,
              target_date=excluded.target_date,
+             start_date=excluded.start_date,
              status=excluded.status,
              updated_at=excluded.updated_at,
              completed_at=excluded.completed_at`,
@@ -656,6 +766,7 @@ export function importBackup(payload: BackupPayload): {
           project.description ?? '',
           project.color,
           project.target_date,
+          project.start_date ?? null,
           project.status,
           project.created_at,
           project.updated_at,
@@ -740,6 +851,29 @@ export function importBackup(payload: BackupPayload): {
         );
     }
 
+    for (const entry of payload.projectTimeEntries ?? []) {
+      localDb
+        .prepare(
+          `INSERT INTO project_time_entries(id,project_id,minutes,logged_date,note,created_at,updated_at)
+           VALUES(?,?,?,?,?,?,?)
+           ON CONFLICT(id) DO UPDATE SET
+             project_id=excluded.project_id,
+             minutes=excluded.minutes,
+             logged_date=excluded.logged_date,
+             note=excluded.note,
+             updated_at=excluded.updated_at`,
+        )
+        .run(
+          entry.id,
+          entry.project_id,
+          entry.minutes,
+          entry.logged_date,
+          entry.note ?? '',
+          entry.created_at,
+          entry.updated_at,
+        );
+    }
+
     localDb.exec('COMMIT');
   } catch (error) {
     localDb.exec('ROLLBACK');
@@ -751,5 +885,6 @@ export function importBackup(payload: BackupPayload): {
     tasks: (payload.tasks ?? []).length,
     subtasks: (payload.subtasks ?? []).length,
     timeEntries: (payload.timeEntries ?? []).length,
+    projectTimeEntries: (payload.projectTimeEntries ?? []).length,
   };
 }

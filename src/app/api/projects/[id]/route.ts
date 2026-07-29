@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireLocalSession, jsonError } from '@/lib/project/api';
-import { getProjectSummary, setProjectStatus, updateProject } from '@/lib/project/repository';
+import { deleteProject, getProjectSummary, setProjectStatus, updateProject } from '@/lib/project/repository';
 import { parseProjectInput, parseProjectStatus } from '@/lib/project/validation';
 
 interface Params {
@@ -32,5 +32,17 @@ export async function PATCH(request: Request, { params }: Params) {
     return NextResponse.json({ project: getProjectSummary(project.id) });
   } catch (error) {
     return jsonError(error, '更新项目失败');
+  }
+}
+
+export async function DELETE(_request: Request, { params }: Params) {
+  const denied = await requireLocalSession();
+  if (denied) return denied;
+  const { id } = await params;
+  try {
+    deleteProject(id);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return jsonError(error, '删除项目失败');
   }
 }
