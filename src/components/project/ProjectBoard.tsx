@@ -132,8 +132,10 @@ export function ProjectBoard({
     }
   }
 
-  async function toggleComplete(task: TaskWithMeta) {
-    const nextStatus: TaskStatus = task.status === 'completed' ? 'todo' : 'completed';
+  // 三态循环：待办 → 进行中 → 已完成 → 待办。让看板能显式切换到「进行中」。
+  async function cycleStatus(task: TaskWithMeta) {
+    const order: TaskStatus[] = ['todo', 'in_progress', 'completed'];
+    const nextStatus = order[(order.indexOf(task.status) + 1) % order.length];
     if (
       nextStatus === 'completed' &&
       task.subtask_total > 0 &&
@@ -212,13 +214,14 @@ export function ProjectBoard({
                   {visible.map((task) => (
                     <article key={task.id} className="task-card">
                       <div className="task-card-top">
-                        <label className="task-check">
-                          <input
-                            type="checkbox"
-                            checked={task.status === 'completed'}
-                            onChange={() => void toggleComplete(task)}
-                          />
-                        </label>
+                        <button
+                          type="button"
+                          className={`status-pill status-${task.status}`}
+                          onClick={() => void cycleStatus(task)}
+                          title="点击循环：待办 → 进行中 → 已完成"
+                        >
+                          {TASK_STATUS_LABELS[task.status]}
+                        </button>
                         <button type="button" className="task-title-btn" onClick={() => openTask(task.id)}>
                           {task.title}
                         </button>
@@ -269,13 +272,14 @@ export function ProjectBoard({
           <div className="task-table">
             {listTasksView.map((task) => (
               <div key={task.id} className="task-row">
-                <label className="task-check">
-                  <input
-                    type="checkbox"
-                    checked={task.status === 'completed'}
-                    onChange={() => void toggleComplete(task)}
-                  />
-                </label>
+                <button
+                  type="button"
+                  className={`status-pill status-${task.status}`}
+                  onClick={() => void cycleStatus(task)}
+                  title="点击循环：待办 → 进行中 → 已完成"
+                >
+                  {TASK_STATUS_LABELS[task.status]}
+                </button>
                 <button type="button" className="task-title-btn" onClick={() => openTask(task.id)}>
                   {task.title}
                 </button>
@@ -570,6 +574,13 @@ function TaskDrawer({
         <button type="button" className="sheet-close" onClick={requestClose}>
           ×
         </button>
+        {!loading && !readOnly ? (
+          <div className="drawer-topbar">
+            <button type="button" className="danger-ghost" onClick={() => void removeTask()}>
+              删除任务
+            </button>
+          </div>
+        ) : null}
                 {loading ? (
           <p className="muted">加载中…</p>
         ) : (

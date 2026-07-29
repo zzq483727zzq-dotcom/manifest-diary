@@ -1,21 +1,29 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import type { ProjectSummary, TaskWithMeta } from '@/types/project';
 import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from '@/types/project';
 import { formatMinutes } from '@/lib/project/date';
 import type { TodayGroups, WeekStats } from '@/lib/project/repository';
 
-const GROUP_META: Array<{
+const GROUPS: Array<{
   key: keyof TodayGroups;
   title: string;
   empty: string;
+  tone: 'danger' | 'accent' | 'neutral';
 }> = [
-  { key: 'overdue', title: '已逾期', empty: '没有逾期任务，节奏不错。' },
-  { key: 'dueToday', title: '今天到期', empty: '今天没有硬截止。' },
-  { key: 'highSoon', title: '未来 3 天高优', empty: '近期没有高优任务。' },
-  { key: 'inProgress', title: '进行中', empty: '还没有进行中的任务。' },
+  { key: 'overdue', title: '已逾期', empty: '没有逾期任务，节奏不错。', tone: 'danger' },
+  { key: 'dueToday', title: '今天到期', empty: '今天没有硬截止。', tone: 'accent' },
+  { key: 'highSoon', title: '未来 3 天高优', empty: '近期没有高优任务。', tone: 'neutral' },
+  { key: 'inProgress', title: '进行中', empty: '还没有进行中的任务。', tone: 'neutral' },
 ];
+
+function dateLine(d = new Date()) {
+  const week = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
+  return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · 周${week}`;
+}
 
 export function TodayDesk({
   groups,
@@ -26,128 +34,225 @@ export function TodayDesk({
   stats: WeekStats;
   projects: ProjectSummary[];
 }) {
-  const totalActionable =
-    groups.overdue.length + groups.dueToday.length + groups.highSoon.length + groups.inProgress.length;
+  const router = useRouter();
+  const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
+
+  async function completeTask(task: TaskWithMeta) {
+    if (busyTaskId) return;
+    setBusyTaskId(task.id);
+    try {
+      const response = await fetch(`/api/tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: task.title,
+          description: task.description,
+          status: task.status === 'completed' ? 'todo' : 'completed',
+          priority: task.priority,
+          due_date: task.due_date,
+          project_id: task.project_id,
+        }),
+      });
+      if (!response.ok) throw new Error('任务更新失败');
+      router.refresh();
+    } catch {
+      window.alert('任务更新失败，请稍后重试。');
+    } finally {
+      setBusyTaskId(null);
+    }
+  }
+
+  const overdueN = groups.overdue.length;
+  const dueN = groups.dueToday.length;
+  const urgent = overdueN + dueN;
+  const total =
+    urgent + groups.highSoon.length + groups.inProgress.length;
+
+  const lead =
+    projects.length === 0
+      ? '从第一个项目开始，把想完成的事拆成可执行的任务。'
+      : total === 0
+        ? '没有紧急任务。去项目里补下一步，或记录一点投入。'
+        : urgent > 0
+          ? `有 ${overdueN} 条逾期、${dueN} 条今日到期。先清紧急，再看高优与进行中。`
+          : `有 ${total} 条值得关注的任务，从最紧急的一组开始。`;
 
   return (
-    <div className="module-page">
-      <header className="module-header">
-        <h1>今天先推进最重要的事</h1>
-        <p>
-          {totalActionable > 0
-            ? `有 ${totalActionable} 条值得关注的任务，从最紧急的一组开始。`
-            : '没有紧急任务。去项目里补下一步，或记录一点投入。'}
-        </p>
+    <div className="td">
+      <header className="td-hero">
+        <p className="td-date">{dateLine()}</p>
+        <div className="td-hero-row">
+          <div>
+            <h1>今天先推进最重要的事</h1>
+            <p className="td-lead">{lead}</p>
+            <p className="td-data-note">演示数据 · 可直接在任务行完成或打开详情</p>
+          </div>
+          {urgent > 0 ? (
+            <div className="td-urgent-chip" aria-label={`紧急 ${urgent} 条`}>
+              <span className="td-urgent-dot" />
+              紧急 {urgent}
+            </div>
+          ) : null}
+        </div>
       </header>
 
-      <div className="today-stats" role="group" aria-label="本周概览">
-        <div className="stat-card">
-          <span>本周完成</span>
-          <strong>{stats.completedThisWeek}</strong>
-        </div>
-        <div className="stat-card">
-          <span>进行中项目</span>
-          <strong>{stats.activeProjects}</strong>
-        </div>
-        <div className="stat-card">
-          <span>完成率</span>
-          <strong>{Math.round(stats.completionRate * 100)}%</strong>
-        </div>
-        <div className="stat-card">
-          <span>本周投入</span>
-          <strong>{formatMinutes(stats.minutesThisWeek)}</strong>
-        </div>
-      </div>
+      <section className="td-metrics" aria-label="本周概览">
+        <Metric label="本周完成" value={String(stats.completedThisWeek)} />
+        <Metric label="进行中项目" value={String(stats.activeProjects)} />
+        <Metric label="完成率" value={`${Math.round(stats.completionRate * 100)}%`} />
+        <Metric label="本周投入" value={formatMinutes(stats.minutesThisWeek)} />
+      </section>
 
       {projects.length === 0 ? (
-        <article className="life-card module-note empty-state">
+        <article className="td-empty">
+          <div className="td-empty-icon" aria-hidden />
           <h2>还没有进行中的项目</h2>
-          <p>把一个想完成的事情变成可执行的项目。</p>
-          <p style={{ marginTop: 18 }}>
-            <Link className="primary-button" href="/projects">
-              创建第一个项目
-            </Link>
-          </p>
+          <p>Clarity 以项目为中心：任务必须归属项目，首页只强调今天要推进的事。</p>
+          <Link className="primary-button" href="/projects">
+            创建第一个项目
+          </Link>
         </article>
       ) : (
         <>
-          <div className="today-groups">
-            {GROUP_META.map((group) => {
-              const items = groups[group.key];
+          <section className="td-board" aria-label="今日行动分组">
+            {GROUPS.map((g) => {
+              const items = groups[g.key];
               const visible = items.slice(0, 5);
+              const urgentPanel = g.tone === 'danger' && items.length > 0;
               return (
-                <section key={group.key} className="today-group">
-                  <div className="today-group-head">
-                    <h2>{group.title}</h2>
-                    <span>{items.length} 条</span>
-                  </div>
+                <section
+                  key={g.key}
+                  className={`td-panel tone-${g.tone}${urgentPanel ? ' is-hot' : ''}`}
+                >
+                  <header className="td-panel-h">
+                    <h2>
+                      <i className={`td-pip tone-${g.tone}`} aria-hidden />
+                      {g.title}
+                    </h2>
+                    <span className="td-count">{items.length}</span>
+                  </header>
+
                   {visible.length === 0 ? (
-                    <p className="muted">{group.empty}</p>
+                    <p className="td-empty-line">{g.empty}</p>
                   ) : (
-                    visible.map((task) => <TodayTaskRow key={task.id} task={task} />)
+                    <ul className="td-list">
+                      {visible.map((task) => (
+                        <li key={task.id}>
+                          <TaskRow
+                            task={task}
+                            hot={g.key === 'overdue'}
+                            busy={busyTaskId === task.id}
+                            onComplete={() => completeTask(task)}
+                          />
+                        </li>
+                      ))}
+                    </ul>
                   )}
+
                   {items.length > 5 ? (
-                    <p className="muted" style={{ marginTop: 8 }}>
-                      还有 {items.length - 5} 条，优先处理上面这些。
-                    </p>
+                    <Link href="/projects" className="td-more-link">
+                      还有 {items.length - 5} 条，查看全部
+                    </Link>
                   ) : null}
                 </section>
               );
             })}
-          </div>
+          </section>
 
-          <div className="today-projects-block">
-            <div className="today-group-head">
+          <section className="td-projects" aria-label="进行中项目">
+            <header className="td-sec-h">
               <h2>进行中项目</h2>
               <Link className="primary-link" href="/projects">
                 全部项目
               </Link>
-            </div>
-            <div className="project-mini-grid">
-              {projects.slice(0, 4).map((project) => (
-                <Link key={project.id} href={`/projects/${project.id}`} className="project-mini-card">
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span
-                      style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: 999,
-                        background: project.color,
-                        display: 'inline-block',
-                      }}
-                    />
-                    <strong>{project.name}</strong>
+            </header>
+            <div className="td-proj-grid">
+              {projects.slice(0, 4).map((p) => (
+                <Link key={p.id} href={`/projects/${p.id}`} className="td-proj">
+                  <div className="td-proj-top">
+                    <span className="td-swatch" style={{ background: p.color }} aria-hidden />
+                    <strong>{p.name}</strong>
+                    <em>{Math.round(p.progress * 100)}%</em>
                   </div>
-                  <small className="muted">
-                    进度 {project.task_completed}/{project.task_total}
-                    {project.nearest_due_date ? ` · 最近截止 ${project.nearest_due_date}` : ''}
-                    {project.minutes_total > 0 ? ` · ${formatMinutes(project.minutes_total)}` : ''}
-                  </small>
-                  <div className="progress-track">
-                    <div className="progress-fill" style={{ width: `${Math.round(project.progress * 100)}%` }} />
+                  <p>
+                    {p.task_completed}/{p.task_total} 已完成
+                    {p.nearest_due_date ? ` · 最近 ${p.nearest_due_date}` : ''}
+                    {p.minutes_total > 0 ? ` · ${formatMinutes(p.minutes_total)}` : ''}
+                  </p>
+                  <div className="td-bar" aria-hidden>
+                    <div style={{ width: `${Math.round(p.progress * 100)}%` }} />
                   </div>
                 </Link>
               ))}
             </div>
-          </div>
+          </section>
         </>
       )}
     </div>
   );
 }
 
-function TodayTaskRow({ task }: { task: TaskWithMeta }) {
+function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <Link href={`/projects/${task.project_id}?task=${task.id}`} className="today-task">
-      <span className={`priority-dot ${task.priority}`} />
-      <div>
+    <div className="td-metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function TaskRow({
+  task,
+  hot,
+  busy,
+  onComplete,
+}: {
+  task: TaskWithMeta;
+  hot?: boolean;
+  busy?: boolean;
+  onComplete: () => void;
+}) {
+  return (
+    <div className={`td-row${hot ? ' hot' : ''}`}>
+      <button
+        className={`td-check${task.status === 'completed' ? ' checked' : ''}`}
+        type="button"
+        aria-label={task.status === 'completed' ? `重新打开：${task.title}` : `完成：${task.title}`}
+        aria-busy={busy}
+        disabled={busy}
+        onClick={onComplete}
+      >
+        {task.status === 'completed' ? '✓' : ''}
+      </button>
+      <Link href={`/projects/${task.project_id}?task=${task.id}`} className="td-row-link">
         <strong>{task.title}</strong>
         <small>
-          {task.project_name} · {TASK_PRIORITY_LABELS[task.priority]} · {TASK_STATUS_LABELS[task.status]}
-          {task.due_date ? ` · ${task.due_date}` : ''}
+          <span className="td-swatch sm" style={{ background: task.project_color }} aria-hidden />
+          {task.project_name}
+          <span>·</span>
+          {TASK_PRIORITY_LABELS[task.priority]}
+          <span>·</span>
+          {TASK_STATUS_LABELS[task.status]}
+          {task.due_date ? (
+            <>
+              <span>·</span>
+              {task.due_date}
+            </>
+          ) : null}
         </small>
+      </Link>
+      <div className="td-row-actions">
+        <time className="td-mins">
+          {task.minutes_total > 0 ? formatMinutes(task.minutes_total) : '—'}
+        </time>
+        <Link
+          href={`/projects/${task.project_id}?task=${task.id}`}
+          className="td-open"
+          aria-label={`打开任务：${task.title}`}
+        >
+          打开
+        </Link>
       </div>
-      <span className="muted">{task.minutes_total > 0 ? formatMinutes(task.minutes_total) : '—'}</span>
-    </Link>
+    </div>
   );
 }
