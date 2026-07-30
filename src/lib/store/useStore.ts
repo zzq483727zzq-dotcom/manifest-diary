@@ -29,8 +29,17 @@ function emit() {
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
+  if (typeof window === 'undefined') return () => listeners.delete(listener);
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === 'clarity-db') {
+      cache = loadDB();
+      listener();
+    }
+  };
+  window.addEventListener('storage', onStorage);
   return () => {
     listeners.delete(listener);
+    window.removeEventListener('storage', onStorage);
   };
 }
 

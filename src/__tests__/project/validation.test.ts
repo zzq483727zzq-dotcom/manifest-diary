@@ -24,6 +24,10 @@ describe('project validation', () => {
     });
   });
 
+  it('parses task focus target minutes', () => {
+    const task = parseTaskInput({ project_id: 'p1', title: '写首页', target_minutes: 45 });
+    expect(task).toMatchObject({ target_minutes: 45 });
+  });
   it('validates time entry bounds', () => {
     expect(() => parseTimeEntryInput({ minutes: 0 }, '2026-07-28')).toThrow('1–1440');
     expect(() => parseTimeEntryInput({ minutes: 30, logged_date: '2099-01-01' }, '2026-07-28')).toThrow(

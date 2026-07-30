@@ -1,53 +1,47 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type {
   ProjectSummary,
-  ProjectTimeEntry,
   Subtask,
   Task,
   TaskPriority,
   TaskStatus,
   TaskWithMeta,
-  TimeEntry,
 } from '@/types/project';
 import {
   PROJECT_STATUS_LABELS,
   TASK_PRIORITY_LABELS,
   TASK_STATUS_LABELS,
 } from '@/types/project';
-import { formatMinutes, localDateString } from '@/lib/project/date';
+import { formatMinutes } from '@/lib/project/date';
 import { CountdownTimer } from '@/components/project/CountdownTimer';
+import { ProjectCountdown } from '@/components/project/ProjectCountdown';
 import { useCountdown } from '@/hooks/useCountdown';
 import { useStore, mutate } from '@/lib/store/useStore';
 import {
-  createProjectTimeEntry,
   createSubtask,
   createTask,
-  createTimeEntry,
   deleteProject as deleteProjectRepo,
-  deleteProjectTimeEntry,
   deleteSubtask,
   deleteTask,
-  deleteTimeEntry,
+  finishTimer,
   getTask,
-  listProjectTimeEntries,
+  getProjectSummary,
   listSubtasks,
   listTasks,
-  listTimeEntries,
   moveSubtask,
-  updateProjectTimeEntry,
+  pauseTimer,
+  startTimer,
+  taskRemainingSeconds,
   updateSubtask,
   updateTask,
-  updateTimeEntry,
 } from '@/lib/store/repository';
 import {
-  parseProjectTimeEntryInput,
   parseSubtaskInput,
   parseTaskInput,
-  parseTimeEntryInput,
 } from '@/lib/project/validation';
 import type { TaskInput } from '@/lib/project/validation';
 
@@ -84,6 +78,10 @@ export function ProjectBoard({
 }) {
   const router = useRouter();
   const db = useStore();
+  const liveProject = useMemo(
+    () => getProjectSummary(db, project.id) ?? project,
+    [db, project],
+  );
   const [view, setView] = useState<'board' | 'list'>('board');
   const tasks = useMemo(() => {
     const live = listTasks(db, project.id);
@@ -95,15 +93,11 @@ export function ProjectBoard({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<TaskPriority>('medium');
-  const [dueDate, setDueDate] = useState('');
-  // 创建任务时「开始日期」默认填今天，可改可清。与「截止日期」并存。
-  const [startDate, setStartDate] = useState<string>('');
+  const [targetMinutes, setTargetMinutes] = useState('25');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [expandedCompleted, setExpandedCompleted] = useState(false);
-  const [timeOpen, setTimeOpen] = useState(false);
   const [deletingProject, setDeletingProject] = useState(false);
-  const [projectMinutes, setProjectMinutes] = useState(project.minutes_total);
 
   useEffect(() => {
     const stored = window.localStorage.getItem('clarity-project-view');
@@ -117,10 +111,6 @@ export function ProjectBoard({
   useEffect(() => {
     if (initialTaskId) setDrawerTaskId(initialTaskId);
   }, [initialTaskId]);
-
-  useEffect(() => {
-    setProjectMinutes(project.minutes_total);
-  }, [project.minutes_total]);
 
   const grouped = useMemo(() => {
     const map: Record<TaskStatus, TaskWithMeta[]> = {
@@ -149,21 +139,18 @@ export function ProjectBoard({
         title,
         description,
         priority,
-        due_date: dueDate || null,
-        start_date: startDate || null,
+        target_minutes: Number(targetMinutes),
+        due_date: null,
+        start_date: null,
       }) as TaskInput;
-      let createdId = '';
       mutate((draft) => {
-        const created = createTask(draft, input);
-        createdId = created.id;
+        createTask(draft, input);
       });
       setCreateOpen(false);
       setTitle('');
       setDescription('');
       setPriority('medium');
-      setDueDate('');
-      setStartDate(todayLocal());
-      setDrawerTaskId(createdId);
+      setTargetMinutes('25');
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建失败');
     } finally {
@@ -201,12 +188,24 @@ export function ProjectBoard({
     router.replace(`/projects/detail?id=${project.id}`);
   }
 
+  function toggleTaskTimer(task: TaskWithMeta) {
+    if (task.status === 'completed') return;
+    mutate((draft) => {
+      if (task.started_at) pauseTimer(draft, task.id);
+      else startTimer(draft, task.id);
+    });
+  }
+
+  function finishTaskEarly(task: TaskWithMeta) {
+    if (task.status === 'completed') return;
+    if (!window.confirm('提前结束并完成这个任务吗？已专注时间会保存。')) return;
+    mutate((draft) => {
+      finishTimer(draft, task.id);
+    });
+  }
+
   function deleteProject() {
-    if (
-      !window.confirm(
-        `确定删除项目「${project.name}」吗？项目下的任务、子任务和全部耗时记录都会一起删除，且无法撤销。`,
-      )
-    ) {
+    if (!window.confirm(`确定删除项目「${project.name}」吗？项目下的任务、子任务和全部耗时记录都会一起删除，且无法撤销。`)) {
       return;
     }
     setDeletingProject(true);
@@ -220,10 +219,6 @@ export function ProjectBoard({
     } finally {
       setDeletingProject(false);
     }
-  }
-
-  function refreshProjectMinutes(total: number) {
-    setProjectMinutes(total);
   }
 
   return (
@@ -240,7 +235,7 @@ export function ProjectBoard({
               进度<em>{project.task_completed}/{project.task_total}</em>
             </span>
             <span className="pb-stat">
-              累计<em>{formatMinutes(projectMinutes)}</em>
+              项目专注<em>{formatMinutes(project.minutes_total)}</em>
             </span>
             {project.start_date ? (
               <span className="pb-stat">
@@ -274,20 +269,11 @@ export function ProjectBoard({
               列表
             </button>
           </div>
-          <button
-            type="button"
-            className={timeOpen ? 'pb-ghost active' : 'pb-ghost'}
-            aria-pressed={timeOpen}
-            onClick={() => setTimeOpen((value) => !value)}
-          >
-            记录耗时
-          </button>
+          <ProjectCountdown project={liveProject} readOnly={project.status === 'archived'} />
           <button
             type="button"
             className="primary-button pb-new"
             onClick={() => {
-              // 打开创建抽屉时把开始日期默认填今天（用户可清）。
-              setStartDate(todayLocal());
               setCreateOpen(true);
             }}
           >
@@ -303,14 +289,6 @@ export function ProjectBoard({
           </button>
         </div>
       </header>
-
-      {timeOpen ? (
-        <ProjectTimeSection
-          projectId={project.id}
-          readOnly={project.status === 'archived'}
-          onMinutesChange={refreshProjectMinutes}
-        />
-      ) : null}
 
       {view === 'board' ? (
         <section className="pb-board" aria-label="任务看板">
@@ -365,6 +343,26 @@ export function ProjectBoard({
                         </div>
                         {task.started_at ? (
                           <CardCountdownChip key={task.id} task={task} />
+                        ) : null}
+                        {task.status !== 'completed' ? (
+                          <div className="pb-focus-actions">
+                            <button
+                              type="button"
+                              className="pb-focus-button"
+                              onClick={() => toggleTaskTimer(task)}
+                            >
+                              {task.started_at ? '暂停' : '开始专注'}
+                            </button>
+                            {task.started_at || task.elapsed_seconds > 0 ? (
+                              <button
+                                type="button"
+                                className="pb-focus-end"
+                                onClick={() => finishTaskEarly(task)}
+                              >
+                                提前结束
+                              </button>
+                            ) : null}
+                          </div>
                         ) : null}
                       </article>
                     );
@@ -444,6 +442,26 @@ export function ProjectBoard({
                       '—'
                     )}
                   </span>
+                  {task.status !== 'completed' ? (
+                    <div className="pb-focus-actions">
+                      <button
+                        type="button"
+                        className="pb-focus-button sm"
+                        onClick={() => toggleTaskTimer(task)}
+                      >
+                        {task.started_at ? '暂停' : '开始专注'}
+                      </button>
+                      {task.started_at || task.elapsed_seconds > 0 ? (
+                        <button
+                          type="button"
+                          className="pb-focus-end sm"
+                          onClick={() => finishTaskEarly(task)}
+                        >
+                          提前结束
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
@@ -477,12 +495,18 @@ export function ProjectBoard({
                 </select>
               </label>
               <label>
-                开始日期
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-              </label>
-              <label>
-                截止日期
-                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} min={startDate || todayLocal()} />
+                专注时长
+                <div className="input-with-suffix">
+                  <input
+                    type="number"
+                    min={1}
+                    max={600}
+                    value={targetMinutes}
+                    onChange={(e) => setTargetMinutes(e.target.value)}
+                    required
+                  />
+                  <span>分钟</span>
+                </div>
               </label>
               {error ? <p className="form-error">{error}</p> : null}
               <button className="primary-button" disabled={saving} type="submit">
@@ -504,163 +528,6 @@ export function ProjectBoard({
   );
 }
 
-// 项目级耗时：不依附任何任务，直接记在项目上。
-function ProjectTimeSection({
-  projectId,
-  readOnly,
-  onMinutesChange,
-}: {
-  projectId: string;
-  readOnly: boolean;
-  onMinutesChange: (total: number) => void;
-}) {
-  const db = useStore();
-  const entries = useMemo(
-    () => listProjectTimeEntries(db, projectId),
-    [db, projectId],
-  );
-  const [minutes, setMinutes] = useState('30');
-  const [date, setDate] = useState(localDateString());
-  const [note, setNote] = useState('');
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    const total = entries.reduce((sum, item) => sum + item.minutes, 0);
-    onMinutesChange(total);
-  }, [entries, onMinutesChange]);
-
-  function save(event: React.FormEvent) {
-    event.preventDefault();
-    if (readOnly) return;
-    setError('');
-    const today = localDateString();
-    try {
-      const input = parseProjectTimeEntryInput(
-        { minutes: Number(minutes), logged_date: date, note },
-        today,
-      );
-      mutate((draft) => {
-        if (editingId) updateProjectTimeEntry(draft, editingId, input);
-        else createProjectTimeEntry(draft, projectId, input);
-      });
-      setMinutes('30');
-      setDate(localDateString());
-      setNote('');
-      setEditingId(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '保存耗时失败');
-    }
-  }
-
-  function startEdit(entry: ProjectTimeEntry) {
-    setEditingId(entry.id);
-    setMinutes(String(entry.minutes));
-    setDate(entry.logged_date);
-    setNote(entry.note || '');
-  }
-
-  function remove(entryId: string) {
-    if (readOnly) return;
-    if (!window.confirm('确定删除这条耗时记录吗？')) return;
-    try {
-      mutate((draft) => {
-        deleteProjectTimeEntry(draft, entryId);
-      });
-    } catch {
-      // silent
-    }
-  }
-
-  return (
-    <section className="pb-time">
-      <div className="pb-time-head">
-        <strong>项目耗时</strong>
-        <span className="muted">不归属任何任务，直接记在项目上</span>
-      </div>
-      <div className="pb-time-list">
-        {entries.map((entry) => (
-          <div key={entry.id} className="pb-time-row">
-            <div>
-              <strong>{formatMinutes(entry.minutes)}</strong>
-              <span className="muted"> · {entry.logged_date}</span>
-              {entry.note ? <p className="muted">{entry.note}</p> : null}
-            </div>
-            {!readOnly ? (
-              <div className="subtask-actions">
-                <button type="button" className="text-button" onClick={() => startEdit(entry)}>
-                  编辑
-                </button>
-                <button
-                  type="button"
-                  className="text-button danger-text"
-                  onClick={() => void remove(entry.id)}
-                >
-                  删除
-                </button>
-              </div>
-            ) : null}
-          </div>
-        ))}
-        {entries.length === 0 ? <p className="muted line">还没有项目级耗时。记录一段不依附任何任务的投入。</p> : null}
-      </div>
-      {readOnly ? (
-        <p className="muted">已归档项目为只读。</p>
-      ) : (
-        <form className="stack-form compact" onSubmit={save}>
-          <div className="meta-grid">
-            <label>
-              分钟
-              <input
-                type="number"
-                min={1}
-                max={1440}
-                value={minutes}
-                onChange={(e) => setMinutes(e.target.value)}
-                required
-              />
-            </label>
-            <label>
-              日期
-              <input
-                type="date"
-                value={date}
-                max={localDateString()}
-                onChange={(e) => setDate(e.target.value)}
-                required
-              />
-            </label>
-          </div>
-          <label>
-            备注
-            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="可选" />
-          </label>
-          <div className="inline-actions">
-            <button type="submit" className="secondary-button">
-              {editingId ? '更新耗时' : '添加耗时'}
-            </button>
-            {editingId ? (
-              <button
-                type="button"
-                className="text-button"
-                onClick={() => {
-                  setEditingId(null);
-                  setMinutes('30');
-                  setDate(localDateString());
-                  setNote('');
-                }}
-              >
-                取消编辑
-              </button>
-            ) : null}
-          </div>
-          {error ? <p className="form-error">{error}</p> : null}
-        </form>
-      )}
-    </section>
-  );
-}
-
 function TaskDrawer({
   taskId,
   projectId,
@@ -673,7 +540,6 @@ function TaskDrawer({
   const db = useStore();
   const task = useMemo(() => getTask(db, taskId), [db, taskId]);
   const subtasks = useMemo(() => listSubtasks(db, taskId), [db, taskId]);
-  const timeEntries = useMemo(() => listTimeEntries(db, taskId), [db, taskId]);
 
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -683,14 +549,9 @@ function TaskDrawer({
   const [status, setStatus] = useState<TaskStatus>('todo');
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [dueDate, setDueDate] = useState('');
-  // 任务本身的开始日期，与截止日期并列；倒计时与开始日期独立。
   const [startDate, setStartDate] = useState('');
   const [sectionError, setSectionError] = useState('');
   const [subtaskTitle, setSubtaskTitle] = useState('');
-  const [timeMinutes, setTimeMinutes] = useState('30');
-  const [timeDate, setTimeDate] = useState(localDateString());
-  const [timeNote, setTimeNote] = useState('');
-  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
 
   // Seed form fields once a task is available (or when taskId changes).
   useEffect(() => {
@@ -702,7 +563,6 @@ function TaskDrawer({
     setDueDate(task.due_date || '');
     setStartDate(task.start_date || '');
     setDirty(false);
-    setEditingEntryId(null);
     setError('');
     setSectionError('');
   }, [task]);
@@ -811,48 +671,6 @@ function TaskDrawer({
     try {
       mutate((draft) => {
         deleteSubtask(draft, subtaskId);
-      });
-    } catch {
-      // silent
-    }
-  }
-
-  function saveTimeEntry(event: React.FormEvent) {
-    event.preventDefault();
-    if (readOnly) return;
-    setSectionError('');
-    const today = localDateString();
-    try {
-      const input = parseTimeEntryInput(
-        { minutes: Number(timeMinutes), logged_date: timeDate, note: timeNote },
-        today,
-      );
-      mutate((draft) => {
-        if (editingEntryId) updateTimeEntry(draft, editingEntryId, input);
-        else createTimeEntry(draft, taskId, input);
-      });
-      setTimeMinutes('30');
-      setTimeDate(localDateString());
-      setTimeNote('');
-      setEditingEntryId(null);
-    } catch (err) {
-      setSectionError(err instanceof Error ? err.message : '保存耗时失败');
-    }
-  }
-
-  function startEditEntry(entry: TimeEntry) {
-    setEditingEntryId(entry.id);
-    setTimeMinutes(String(entry.minutes));
-    setTimeDate(entry.logged_date);
-    setTimeNote(entry.note || '');
-  }
-
-  function removeTimeEntry(entryId: string) {
-    if (readOnly) return;
-    if (!window.confirm('确定删除这条耗时记录吗？')) return;
-    try {
-      mutate((draft) => {
-        deleteTimeEntry(draft, entryId);
       });
     } catch {
       // silent
@@ -1041,92 +859,9 @@ function TaskDrawer({
 
             <section className="drawer-section">
               <div className="drawer-section-head">
-                <strong>耗时记录</strong>
+                <strong>专注时间</strong>
                 <span>累计 {formatMinutes(minutesTotal)}</span>
               </div>
-              <div className="time-entry-list">
-                {timeEntries.map((entry) => (
-                  <div key={entry.id} className="time-entry-row">
-                    <div>
-                      <strong>{formatMinutes(entry.minutes)}</strong>
-                      <span className="muted"> · {entry.logged_date}</span>
-                      {entry.note ? <p className="muted">{entry.note}</p> : null}
-                    </div>
-                    {!readOnly ? (
-                      <div className="subtask-actions">
-                        <button type="button" className="text-button" onClick={() => startEditEntry(entry)}>
-                          编辑
-                        </button>
-                        <button
-                          type="button"
-                          className="text-button danger-text"
-                          onClick={() => void removeTimeEntry(entry.id)}
-                        >
-                          删除
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
-                {timeEntries.length === 0 ? <p className="muted">还没有耗时记录。</p> : null}
-              </div>
-              {!readOnly ? (
-                <form className="stack-form compact" onSubmit={saveTimeEntry}>
-                  <div className="meta-grid">
-                    <label>
-                      分钟
-                      <input
-                        type="number"
-                        min={1}
-                        max={1440}
-                        value={timeMinutes}
-                        onChange={(e) => setTimeMinutes(e.target.value)}
-                        required
-                      />
-                    </label>
-                    <label>
-                      日期
-                      <input
-                        type="date"
-                        value={timeDate}
-                        max={localDateString()}
-                        onChange={(e) => setTimeDate(e.target.value)}
-                        required
-                      />
-                    </label>
-                  </div>
-                  <label>
-                    备注
-                    <input
-                      value={timeNote}
-                      onChange={(e) => setTimeNote(e.target.value)}
-                      maxLength={200}
-                      placeholder="可选"
-                    />
-                  </label>
-                  <div className="inline-actions">
-                    <button type="submit" className="secondary-button">
-                      {editingEntryId ? '更新耗时' : '添加耗时'}
-                    </button>
-                    {editingEntryId ? (
-                      <button
-                        type="button"
-                        className="text-button"
-                        onClick={() => {
-                          setEditingEntryId(null);
-                          setTimeMinutes('30');
-                          setTimeDate(localDateString());
-                          setTimeNote('');
-                        }}
-                      >
-                        取消编辑
-                      </button>
-                    ) : null}
-                  </div>
-                </form>
-              ) : (
-                <p className="muted">已归档项目中的任务为只读。</p>
-              )}
             </section>
 
             {sectionError ? <p className="form-error">{sectionError}</p> : null}
@@ -1160,7 +895,21 @@ function CardCountdownChip({
   task: TaskWithMeta;
   asText?: boolean;
 }) {
-  const remaining = useCountdown(task);
+  const remaining = useCountdown(task, (item, now) => taskRemainingSeconds(item, now));
+  const finishedRef = useRef(false);
+
+  useEffect(() => {
+    finishedRef.current = false;
+  }, [task.started_at, task.elapsed_seconds]);
+
+  useEffect(() => {
+    if (!task.started_at || remaining > 0 || finishedRef.current) return;
+    finishedRef.current = true;
+    mutate((draft) => {
+      finishTimer(draft, task.id);
+    });
+  }, [remaining, task.id, task.started_at]);
+
   const m = Math.floor(remaining / 60);
   const s = remaining % 60;
   const text = `⏱ ${m}:${String(s).padStart(2, '0')}`;

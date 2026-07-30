@@ -169,6 +169,9 @@ export function createProject(db: ClarityDB, input: ProjectInput): Project {
     created_at: at,
     updated_at: at,
     completed_at: null,
+    target_minutes: 25,
+    started_at: null,
+    elapsed_seconds: 0,
   };
   db.projects.push(project);
   return project;
@@ -264,7 +267,10 @@ export function createTask(db: ClarityDB, input: TaskInput): TaskWithMeta {
     due_date: input.due_date,
     start_date: input.start_date ?? null,
     position,
-    target_minutes: 25,
+    target_minutes:
+      typeof input.target_minutes === 'number' && Number.isFinite(input.target_minutes)
+        ? input.target_minutes
+        : 25,
     started_at: null,
     elapsed_seconds: 0,
     created_at: at,
@@ -291,22 +297,33 @@ export function updateTask(
 
   if (patch.title != null) existing.title = patch.title;
   if (patch.description != null) existing.description = patch.description;
-  const status = patch.status ?? existing.status;
-  existing.status = status;
+  // 旧状态先记下，用于：completed 保留 completed_at、以及"切到完成时自动停计时"。
+  const prevStatus = existing.status;
+  const status = patch.status ?? prevStatus;
   if (patch.priority != null) existing.priority = patch.priority;
   if (patch.due_date !== undefined) existing.due_date = patch.due_date;
   if (patch.start_date !== undefined) existing.start_date = patch.start_date;
 
   const at = nowIso();
+  // 切到「已完成」时，无论计时正在运行还是已暂停，都把累计专注落账。
+  if (
+    status === 'completed' &&
+    prevStatus !== 'completed' &&
+    (existing.started_at || existing.elapsed_seconds > 0)
+  ) {
+    // 复用 stopTimer 的落账逻辑（签名 `(db, taskId, opts)`）。
+    stopTimer(db, id, { note: '任务完成自动计入' });
+  }
+  existing.status = status;
   existing.updated_at = at;
   existing.completed_at =
     status === 'completed'
-      ? existing.status === 'completed' && existing.completed_at
+      ? prevStatus === 'completed' && existing.completed_at
         ? existing.completed_at
         : at
       : null;
 
-  if (status !== existing.status || nextProjectId !== existing.project_id) {
+  if (status !== prevStatus || nextProjectId !== existing.project_id) {
     existing.position = nextTaskPosition(db, nextProjectId, status);
   }
   existing.project_id = nextProjectId;
@@ -538,8 +555,15 @@ export function taskRemainingSeconds(task: Task, now: number = Date.now()): numb
 export function startTimer(db: ClarityDB, taskId: string): void {
   const task = getTaskEntity(db, taskId);
   if (!task) throw new Error('任务不存在');
+  if (task.status === 'completed') return;
   if (task.started_at) return; // 已在运行，不动
+  const previousStatus = task.status;
   task.started_at = nowIso();
+  task.status = 'in_progress';
+  task.completed_at = null;
+  if (previousStatus !== 'in_progress') {
+    task.position = nextTaskPosition(db, task.project_id, 'in_progress');
+  }
   task.updated_at = task.started_at;
   touchProject(db, task.project_id, task.started_at);
 }
@@ -563,8 +587,7 @@ export function pauseTimer(db: ClarityDB, taskId: string): void {
 }
 
 /**
- * 停止倒计时并把已专注时长落成一条耗时记录，状态归零。
- * 落账 minutes 取专注秒数向上取整（至少 1 分钟，避免 0 分钟空记录）。
+ * 停止倒计时并把已专注时长落账，状态归零。
  * elapsed_seconds / started_at 清零，可重新开始下一轮。
  */
 export function stopTimer(
@@ -578,8 +601,14 @@ export function stopTimer(
   if (project?.status === 'archived') throw new Error('已归档项目不能记录耗时');
 
   const elapsed = taskElapsedSeconds(task);
-  const minutes = Math.max(1, Math.round(elapsed / 60));
+  const hadFocus = Boolean(task.started_at) || task.elapsed_seconds > 0;
   const at = nowIso();
+  const minutes = hadFocus ? Math.max(1, Math.ceil(elapsed / 60)) : 0;
+  task.started_at = null;
+  task.elapsed_seconds = 0;
+  task.updated_at = at;
+  touchProject(db, task.project_id, at);
+  if (minutes <= 0) return null;
   const entry: TimeEntry = {
     id: uuid(),
     task_id: taskId,
@@ -590,10 +619,6 @@ export function stopTimer(
     updated_at: at,
   };
   db.timeEntries.push(entry);
-  task.started_at = null;
-  task.elapsed_seconds = 0;
-  task.updated_at = at;
-  touchProject(db, task.project_id, at);
   return entry;
 }
 
@@ -602,7 +627,16 @@ export function stopTimer(
  * 与 stopTimer 等价但语义上"用完了目标时长"。
  */
 export function finishTimer(db: ClarityDB, taskId: string): TimeEntry | null {
-  return stopTimer(db, taskId, { note: '倒计时完成' });
+  const entry = stopTimer(db, taskId, { note: '倒计时完成' });
+  const task = getTaskEntity(db, taskId);
+  if (!task || task.status === 'completed') return entry;
+  const at = nowIso();
+  task.status = 'completed';
+  task.completed_at = at;
+  task.updated_at = at;
+  task.position = nextTaskPosition(db, task.project_id, 'completed');
+  touchProject(db, task.project_id, at);
+  return entry;
 }
 
 /** 修改目标时长（分钟）。不影响正在跑的计时，改的是 goal 分钟。 */
@@ -616,6 +650,98 @@ export function setTargetMinutes(db: ClarityDB, taskId: string, minutes: number)
   task.target_minutes = m;
   task.updated_at = nowIso();
   touchProject(db, task.project_id, task.updated_at);
+}
+
+// ---------------------------------------------------------------------------
+// Project-level countdown timer (一个项目整计时，与任务级同构)
+// ---------------------------------------------------------------------------
+
+/**
+ * 项目级整计时已专注秒数（实时）。运行中 = acc + (now - started)；暂停 = acc。
+ */
+export function projectElapsedSeconds(project: Project, now: number = Date.now()): number {
+  const acc = project.elapsed_seconds || 0;
+  if (!project.started_at) return acc;
+  const started = Date.parse(project.started_at);
+  if (!Number.isFinite(started)) return acc;
+  return acc + Math.max(0, Math.floor((now - started) / 1000));
+}
+
+/** 项目整计时剩余秒（>=0）。 */
+export function projectRemainingSeconds(project: Project, now: number = Date.now()): number {
+  const elapsed = projectElapsedSeconds(project, now);
+  const total = Math.max(0, project.target_minutes || 0) * 60;
+  return Math.max(0, total - elapsed);
+}
+
+export function startProjectTimer(db: ClarityDB, projectId: string): void {
+  const project = getProject(db, projectId);
+  if (!project) throw new Error('项目不存在');
+  if (project.started_at) return;
+  project.started_at = nowIso();
+  project.updated_at = project.started_at;
+}
+
+export function pauseProjectTimer(db: ClarityDB, projectId: string): void {
+  const project = getProject(db, projectId);
+  if (!project) throw new Error('项目不存在');
+  if (!project.started_at) return;
+  const started = Date.parse(project.started_at);
+  const at = nowIso();
+  if (Number.isFinite(started)) {
+    project.elapsed_seconds += Math.max(0, Math.floor((Date.now() - started) / 1000));
+  }
+  project.started_at = null;
+  project.updated_at = at;
+}
+
+/**
+ * 停止项目整计时：把专注时长落账，计时归零，可开始下一轮。
+ */
+export function stopProjectTimer(
+  db: ClarityDB,
+  projectId: string,
+  opts: { note?: string } = {},
+): ProjectTimeEntry | null {
+  const project = getProject(db, projectId);
+  if (!project) throw new Error('项目不存在');
+
+  const elapsed = projectElapsedSeconds(project);
+  const minutes = Math.round(elapsed / 60);
+  const at = nowIso();
+  project.started_at = null;
+  project.elapsed_seconds = 0;
+  project.updated_at = at;
+  if (minutes <= 0) return null;
+  const entry: ProjectTimeEntry = {
+    id: uuid(),
+    project_id: projectId,
+    minutes,
+    logged_date: todayStr(),
+    note: opts.note ?? '项目专注',
+    created_at: at,
+    updated_at: at,
+  };
+  db.projectTimeEntries.push(entry);
+  return entry;
+}
+
+export function finishProjectTimer(db: ClarityDB, projectId: string): ProjectTimeEntry | null {
+  return stopProjectTimer(db, projectId, { note: '项目倒计时完成' });
+}
+
+export function setProjectTargetMinutes(
+  db: ClarityDB,
+  projectId: string,
+  minutes: number,
+): void {
+  const project = getProject(db, projectId);
+  if (!project) throw new Error('项目不存在');
+  if (!Number.isFinite(minutes) || minutes < 1 || minutes > 600) {
+    throw new Error('目标时长需为 1–600 的整数分钟');
+  }
+  project.target_minutes = Math.floor(minutes);
+  project.updated_at = nowIso();
 }
 
 
@@ -847,6 +973,15 @@ export function importBackup(
       created_at: project.created_at,
       updated_at: project.updated_at,
       completed_at: project.completed_at,
+      target_minutes:
+        typeof project.target_minutes === 'number' && Number.isFinite(project.target_minutes)
+          ? project.target_minutes
+          : 25,
+      started_at: project.started_at ?? null,
+      elapsed_seconds:
+        typeof project.elapsed_seconds === 'number' && Number.isFinite(project.elapsed_seconds)
+          ? project.elapsed_seconds
+          : 0,
     };
     if (existing) Object.assign(existing, record);
     else db.projects.push(record);

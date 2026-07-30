@@ -41,6 +41,7 @@ export interface TaskInput {
   priority: TaskPriority;
   due_date: string | null;
   start_date: string | null;
+  target_minutes?: number;
 }
 
 export interface SubtaskInput {
@@ -114,6 +115,7 @@ export function parseTaskInput(raw: unknown, partial = false): Partial<TaskInput
     }
     if ('due_date' in input) result.due_date = optionalDate(input.due_date, '截止日期');
     if ('start_date' in input) result.start_date = optionalDate(input.start_date, '开始日期');
+    if ('target_minutes' in input) result.target_minutes = parseTargetMinutes(input.target_minutes);
     return result;
   }
 
@@ -122,6 +124,9 @@ export function parseTaskInput(raw: unknown, partial = false): Partial<TaskInput
   const description = trimString(input.description ?? '', '任务描述', 0, 5000, false);
   const status = (input.status as TaskStatus) || 'todo';
   const priority = (input.priority as TaskPriority) || 'medium';
+  const target_minutes = 'target_minutes' in input
+    ? parseTargetMinutes(input.target_minutes)
+    : undefined;
   if (!statusValues.includes(status)) throw new Error('任务状态不支持');
   if (!priorityValues.includes(priority)) throw new Error('优先级不支持');
   return {
@@ -132,7 +137,16 @@ export function parseTaskInput(raw: unknown, partial = false): Partial<TaskInput
     priority,
     due_date: optionalDate(input.due_date, '截止日期'),
     start_date: optionalDate(input.start_date, '开始日期'),
+    ...(target_minutes == null ? {} : { target_minutes }),
   };
+}
+
+function parseTargetMinutes(value: unknown): number {
+  const minutes = Number(value);
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 600) {
+    throw new Error('专注时长需为 1–600 的整数分钟');
+  }
+  return minutes;
 }
 
 export function parseSubtaskInput(raw: unknown): SubtaskInput {

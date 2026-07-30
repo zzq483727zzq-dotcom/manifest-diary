@@ -52,7 +52,7 @@ export function loadDB(): ClarityDB {
     const parsed = JSON.parse(raw) as Partial<ClarityDB>;
     return {
       version: 1,
-      projects: Array.isArray(parsed.projects) ? parsed.projects : [],
+      projects: Array.isArray(parsed.projects) ? normalizeProjects(parsed.projects) : [],
       // 老数据 Task 可能缺倒计时要用的字段，统一兜底到默认值，避免渲染/计算崩。
       tasks: Array.isArray(parsed.tasks) ? normalizeTasks(parsed.tasks) : [],
       subtasks: Array.isArray(parsed.subtasks) ? parsed.subtasks : [],
@@ -123,6 +123,22 @@ function normalizeTasks(tasks: Task[]): Task[] {
     elapsed_seconds:
       typeof t.elapsed_seconds === 'number' && Number.isFinite(t.elapsed_seconds)
         ? t.elapsed_seconds
+        : 0,
+  }));
+}
+
+/** 项目级专注倒计时同样需要兜底三字段（老数据没有）。 */
+function normalizeProjects(projects: Project[]): Project[] {
+  return projects.map((p) => ({
+    ...p,
+    target_minutes:
+      typeof p.target_minutes === 'number' && Number.isFinite(p.target_minutes)
+        ? p.target_minutes
+        : 25,
+    started_at: p.started_at ?? null,
+    elapsed_seconds:
+      typeof p.elapsed_seconds === 'number' && Number.isFinite(p.elapsed_seconds)
+        ? p.elapsed_seconds
         : 0,
   }));
 }

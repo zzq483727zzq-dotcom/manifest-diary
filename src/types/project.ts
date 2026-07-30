@@ -24,6 +24,11 @@ export interface Project {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  // 项目级整体专注倒计时。同构于任务的计时三字段：
+  // target_minutes = 目标（默认 25），started_at = 运行起算 ISO / null，elapsed_seconds = 暂停时累计秒。
+  target_minutes: number;
+  started_at: string | null;
+  elapsed_seconds: number;
 }
 
 export interface Task {

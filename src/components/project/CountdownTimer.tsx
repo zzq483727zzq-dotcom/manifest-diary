@@ -10,6 +10,7 @@ import {
   startTimer,
   stopTimer,
   taskElapsedSeconds,
+  taskRemainingSeconds,
 } from '@/lib/store/repository';
 import { useCountdown } from '@/hooks/useCountdown';
 
@@ -32,8 +33,9 @@ function fmtSec(total: number) {
  * 专注时长用 started_at + elapsed_seconds 实时算，刷新页面/关页不丢秒。
  */
 export function CountdownTimer({ task, readOnly }: { task: Task; readOnly?: boolean }) {
-  const remaining = useCountdown(task);
+  const remaining = useCountdown(task, taskRemainingSeconds);
   const running = Boolean(task.started_at);
+  const completed = task.status === 'completed';
   const hasRun = (task.elapsed_seconds ?? 0) > 0 || running;
   const elapsed = taskElapsedSeconds(task);
   const [target, setTarget] = useState<string>(String(task.target_minutes || 25));
@@ -73,10 +75,10 @@ export function CountdownTimer({ task, readOnly }: { task: Task; readOnly?: bool
     mutate((draft) => setTargetMinutes(draft, task.id, Math.floor(n)));
   }
 
-  if (readOnly) {
+  if (readOnly || completed) {
     return (
-      <div className="cd cd-ro" aria-label="倒计时（只读）">
-        <div className="cd-time">{fmtSec(remaining)}</div>
+      <div className="cd cd-ro" aria-label={completed ? '任务已完成' : '倒计时（只读）'}>
+        <div className="cd-time">{completed ? '已完成' : fmtSec(remaining)}</div>
         <div className="cd-sub">目标 {task.target_minutes || 25} 分钟 · 累计专注 {fmtSec(elapsed)}</div>
       </div>
     );
@@ -125,8 +127,25 @@ export function CountdownTimer({ task, readOnly }: { task: Task; readOnly?: bool
           className="pb-ghost"
           disabled={!hasRun}
           onClick={() => {
+            if (!hasRun || !window.confirm('提前结束并完成这个任务吗？已专注时间会保存。')) return;
+            try {
+              mutate((d) => {
+                finishTimer(d, task.id);
+              });
+            } catch {
+              // silent
+            }
+          }}
+        >
+          提前结束
+        </button>
+        <button
+          type="button"
+          className="pb-ghost"
+          disabled={!hasRun}
+          onClick={() => {
             if (!hasRun) return;
-            if (!window.confirm('停止并把已计时写成一条耗时记录吗？')) return;
+            if (!window.confirm('停止并保存这段专注时间吗？')) return;
             try {
               mutate((d) => { stopTimer(d, task.id); });
             } catch {
@@ -134,7 +153,7 @@ export function CountdownTimer({ task, readOnly }: { task: Task; readOnly?: bool
             }
           }}
         >
-          停止并记录
+          停止并保存
         </button>
       </div>
     </div>
