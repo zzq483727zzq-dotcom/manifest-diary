@@ -262,7 +262,11 @@ export function createTask(db: ClarityDB, input: TaskInput): TaskWithMeta {
     status: input.status,
     priority: input.priority,
     due_date: input.due_date,
+    start_date: input.start_date ?? null,
     position,
+    target_minutes: 25,
+    started_at: null,
+    elapsed_seconds: 0,
     created_at: at,
     updated_at: at,
     completed_at: input.status === 'completed' ? at : null,
@@ -291,6 +295,7 @@ export function updateTask(
   existing.status = status;
   if (patch.priority != null) existing.priority = patch.priority;
   if (patch.due_date !== undefined) existing.due_date = patch.due_date;
+  if (patch.start_date !== undefined) existing.start_date = patch.start_date;
 
   const at = nowIso();
   existing.updated_at = at;
@@ -502,6 +507,117 @@ export function deleteTimeEntry(db: ClarityDB, id: string) {
   db.timeEntries = db.timeEntries.filter((item) => item.id !== id);
   touchProject(db, task.project_id, at);
 }
+
+// ---------------------------------------------------------------------------
+// Countdown timer
+// ---------------------------------------------------------------------------
+
+/**
+ * 把任务里"运行中计时态"换算成已专注秒数（实时）。
+ * 运行中：累计 + (现在 - started_at)；暂停：就是累计。
+ * 不写库，只算给 UI 显示用。
+ */
+export function taskElapsedSeconds(task: Task, now: number = Date.now()): number {
+  const acc = task.elapsed_seconds || 0;
+  if (!task.started_at) return acc;
+  const started = Date.parse(task.started_at);
+  if (!Number.isFinite(started)) return acc;
+  return acc + Math.max(0, Math.floor((now - started) / 1000));
+}
+
+/**
+ * 倒计时剩余秒数：>=0。用于 UI 显示 mm:ss / 判断是否到点。
+ */
+export function taskRemainingSeconds(task: Task, now: number = Date.now()): number {
+  const elapsed = taskElapsedSeconds(task, now);
+  const total = Math.max(0, task.target_minutes || 0) * 60;
+  return Math.max(0, total - elapsed);
+}
+
+/** 开始终倒计时。若已在跑则不改（避免重复起算）。 */
+export function startTimer(db: ClarityDB, taskId: string): void {
+  const task = getTaskEntity(db, taskId);
+  if (!task) throw new Error('任务不存在');
+  if (task.started_at) return; // 已在运行，不动
+  task.started_at = nowIso();
+  task.updated_at = task.started_at;
+  touchProject(db, task.project_id, task.started_at);
+}
+
+/**
+ * 暂停倒计时：把 本次运行时长 加进 elapsed_seconds，清 started_at。
+ * 不落账（不写 TimeEntry），专注时长保留在 elapsed_seconds 里，可再继续。
+ */
+export function pauseTimer(db: ClarityDB, taskId: string): void {
+  const task = getTaskEntity(db, taskId);
+  if (!task) throw new Error('任务不存在');
+  if (!task.started_at) return; // 没在跑
+  const started = Date.parse(task.started_at);
+  const at = nowIso();
+  if (Number.isFinite(started)) {
+    task.elapsed_seconds += Math.max(0, Math.floor((Date.now() - started) / 1000));
+  }
+  task.started_at = null;
+  task.updated_at = at;
+  touchProject(db, task.project_id, at);
+}
+
+/**
+ * 停止倒计时并把已专注时长落成一条耗时记录，状态归零。
+ * 落账 minutes 取专注秒数向上取整（至少 1 分钟，避免 0 分钟空记录）。
+ * elapsed_seconds / started_at 清零，可重新开始下一轮。
+ */
+export function stopTimer(
+  db: ClarityDB,
+  taskId: string,
+  opts: { note?: string } = {},
+): TimeEntry | null {
+  const task = getTaskEntity(db, taskId);
+  if (!task) throw new Error('任务不存在');
+  const project = getProject(db, task.project_id);
+  if (project?.status === 'archived') throw new Error('已归档项目不能记录耗时');
+
+  const elapsed = taskElapsedSeconds(task);
+  const minutes = Math.max(1, Math.round(elapsed / 60));
+  const at = nowIso();
+  const entry: TimeEntry = {
+    id: uuid(),
+    task_id: taskId,
+    minutes,
+    logged_date: todayStr(),
+    note: opts.note ?? '倒计时专注',
+    created_at: at,
+    updated_at: at,
+  };
+  db.timeEntries.push(entry);
+  task.started_at = null;
+  task.elapsed_seconds = 0;
+  task.updated_at = at;
+  touchProject(db, task.project_id, at);
+  return entry;
+}
+
+/**
+ * 倒计时归零时的到点处理：响铃由 UI 触发；这里只负责落账 + 归零，
+ * 与 stopTimer 等价但语义上"用完了目标时长"。
+ */
+export function finishTimer(db: ClarityDB, taskId: string): TimeEntry | null {
+  return stopTimer(db, taskId, { note: '倒计时完成' });
+}
+
+/** 修改目标时长（分钟）。不影响正在跑的计时，改的是 goal 分钟。 */
+export function setTargetMinutes(db: ClarityDB, taskId: string, minutes: number): void {
+  const task = getTaskEntity(db, taskId);
+  if (!task) throw new Error('任务不存在');
+  if (!Number.isFinite(minutes) || minutes < 1 || minutes > 600) {
+    throw new Error('目标时长需为 1–600 的整数分钟');
+  }
+  const m = Math.floor(minutes);
+  task.target_minutes = m;
+  task.updated_at = nowIso();
+  touchProject(db, task.project_id, task.updated_at);
+}
+
 
 // ---------------------------------------------------------------------------
 // Project-level time entries (recorded on the project, not on a task)
@@ -746,7 +862,17 @@ export function importBackup(
       status: task.status,
       priority: task.priority,
       due_date: task.due_date,
+      start_date: task.start_date ?? null,
       position: task.position ?? 0,
+      target_minutes:
+        typeof task.target_minutes === 'number' && Number.isFinite(task.target_minutes)
+          ? task.target_minutes
+          : 25,
+      started_at: task.started_at ?? null,
+      elapsed_seconds:
+        typeof task.elapsed_seconds === 'number' && Number.isFinite(task.elapsed_seconds)
+          ? task.elapsed_seconds
+          : 0,
       created_at: task.created_at,
       updated_at: task.updated_at,
       completed_at: task.completed_at,

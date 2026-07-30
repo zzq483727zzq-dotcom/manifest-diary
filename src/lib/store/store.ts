@@ -53,7 +53,8 @@ export function loadDB(): ClarityDB {
     return {
       version: 1,
       projects: Array.isArray(parsed.projects) ? parsed.projects : [],
-      tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
+      // 老数据 Task 可能缺倒计时要用的字段，统一兜底到默认值，避免渲染/计算崩。
+      tasks: Array.isArray(parsed.tasks) ? normalizeTasks(parsed.tasks) : [],
       subtasks: Array.isArray(parsed.subtasks) ? parsed.subtasks : [],
       timeEntries: Array.isArray(parsed.timeEntries) ? parsed.timeEntries : [],
       projectTimeEntries: Array.isArray(parsed.projectTimeEntries)
@@ -103,4 +104,25 @@ export function todayStr(date = new Date()): string {
 /** Deep clone helper for callers that need a private mutable copy. */
 export function cloneDB(db: ClarityDB): ClarityDB {
   return clone(db);
+}
+
+/**
+ * 把从 localStorage 读出的 task 列表里缺倒计时要用的字段补成默认值，
+ * 让老数据（没有 target_minutes/started_at/elapsed_seconds/start_date）
+ * 也能正常渲染与计时，不会因 undefined 撕裂计算。
+ */
+function normalizeTasks(tasks: Task[]): Task[] {
+  return tasks.map((t) => ({
+    ...t,
+    start_date: t.start_date ?? null,
+    target_minutes:
+      typeof t.target_minutes === 'number' && Number.isFinite(t.target_minutes)
+        ? t.target_minutes
+        : 25,
+    started_at: t.started_at ?? null,
+    elapsed_seconds:
+      typeof t.elapsed_seconds === 'number' && Number.isFinite(t.elapsed_seconds)
+        ? t.elapsed_seconds
+        : 0,
+  }));
 }

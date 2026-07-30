@@ -41,7 +41,8 @@ export function ProjectsWorkspace() {
   const [description, setDescription] = useState('');
   const [color, setColor] = useState<ProjectColor>(PROJECT_COLORS[0]);
   const [targetDate, setTargetDate] = useState('');
-  const [startDate, setStartDate] = useState('');
+  // 项目创建表单「开始日期」默认填今天，与任务侧保持一致。
+  const [startDate, setStartDate] = useState(todayLocal());
   const [menuId, setMenuId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -87,7 +88,7 @@ export function ProjectsWorkspace() {
       setDescription('');
       setColor(PROJECT_COLORS[0]);
       setTargetDate('');
-      setStartDate('');
+      setStartDate(todayLocal());
       router.push(`/projects/detail?id=${createdId}`);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : '创建失败');
@@ -132,7 +133,14 @@ export function ProjectsWorkspace() {
           <h1>把想完成的事情变成可执行项目</h1>
           <p>先建项目，再拆任务。进度、截止日期和投入都会围绕项目汇总。</p>
         </div>
-        <button type="button" className="primary-button" onClick={() => setDrawerOpen(true)}>
+        <button
+          type="button"
+          className="primary-button"
+          onClick={() => {
+            setStartDate(todayLocal());
+            setDrawerOpen(true);
+          }}
+        >
           新建项目
         </button>
       </header>
@@ -157,7 +165,14 @@ export function ProjectsWorkspace() {
           <span className="projects-empty-mark" aria-hidden />
           <h2>{emptyCopy.title}</h2>
           <p>{emptyCopy.body}</p>
-          <button type="button" className="primary-button" onClick={() => setDrawerOpen(true)}>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => {
+              setStartDate(todayLocal());
+              setDrawerOpen(true);
+            }}
+          >
             {emptyCopy.action}
           </button>
         </article>

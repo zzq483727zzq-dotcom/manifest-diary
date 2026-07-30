@@ -40,6 +40,7 @@ export interface TaskInput {
   status: TaskStatus;
   priority: TaskPriority;
   due_date: string | null;
+  start_date: string | null;
 }
 
 export interface SubtaskInput {
@@ -112,6 +113,7 @@ export function parseTaskInput(raw: unknown, partial = false): Partial<TaskInput
       result.priority = input.priority as TaskPriority;
     }
     if ('due_date' in input) result.due_date = optionalDate(input.due_date, '截止日期');
+    if ('start_date' in input) result.start_date = optionalDate(input.start_date, '开始日期');
     return result;
   }
 
@@ -129,6 +131,7 @@ export function parseTaskInput(raw: unknown, partial = false): Partial<TaskInput
     status,
     priority,
     due_date: optionalDate(input.due_date, '截止日期'),
+    start_date: optionalDate(input.start_date, '开始日期'),
   };
 }
 

@@ -7,6 +7,7 @@ import type {
   ProjectSummary,
   ProjectTimeEntry,
   Subtask,
+  Task,
   TaskPriority,
   TaskStatus,
   TaskWithMeta,
@@ -18,6 +19,8 @@ import {
   TASK_STATUS_LABELS,
 } from '@/types/project';
 import { formatMinutes, localDateString } from '@/lib/project/date';
+import { CountdownTimer } from '@/components/project/CountdownTimer';
+import { useCountdown } from '@/hooks/useCountdown';
 import { useStore, mutate } from '@/lib/store/useStore';
 import {
   createProjectTimeEntry,
@@ -93,6 +96,8 @@ export function ProjectBoard({
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [dueDate, setDueDate] = useState('');
+  // 创建任务时「开始日期」默认填今天，可改可清。与「截止日期」并存。
+  const [startDate, setStartDate] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [expandedCompleted, setExpandedCompleted] = useState(false);
@@ -145,6 +150,7 @@ export function ProjectBoard({
         description,
         priority,
         due_date: dueDate || null,
+        start_date: startDate || null,
       }) as TaskInput;
       let createdId = '';
       mutate((draft) => {
@@ -156,6 +162,7 @@ export function ProjectBoard({
       setDescription('');
       setPriority('medium');
       setDueDate('');
+      setStartDate(todayLocal());
       setDrawerTaskId(createdId);
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建失败');
@@ -275,7 +282,15 @@ export function ProjectBoard({
           >
             记录耗时
           </button>
-          <button type="button" className="primary-button pb-new" onClick={() => setCreateOpen(true)}>
+          <button
+            type="button"
+            className="primary-button pb-new"
+            onClick={() => {
+              // 打开创建抽屉时把开始日期默认填今天（用户可清）。
+              setStartDate(todayLocal());
+              setCreateOpen(true);
+            }}
+          >
             新建任务
           </button>
           <button
@@ -348,6 +363,9 @@ export function ProjectBoard({
                             <span className="pb-meta-min">{formatMinutes(task.minutes_total)}</span>
                           ) : null}
                         </div>
+                        {task.started_at ? (
+                          <CardCountdownChip key={task.id} task={task} />
+                        ) : null}
                       </article>
                     );
                   })}
@@ -418,7 +436,13 @@ export function ProjectBoard({
                     {task.due_date || '—'}
                   </span>
                   <span className="pb-list-min">
-                    {task.minutes_total > 0 ? formatMinutes(task.minutes_total) : '—'}
+                    {task.started_at ? (
+                      <CardCountdownChip key={task.id} task={task} asText />
+                    ) : task.minutes_total > 0 ? (
+                      formatMinutes(task.minutes_total)
+                    ) : (
+                      '—'
+                    )}
                   </span>
                 </div>
               );
@@ -453,8 +477,12 @@ export function ProjectBoard({
                 </select>
               </label>
               <label>
+                开始日期
+                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              </label>
+              <label>
                 截止日期
-                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} min={todayLocal()} />
+                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} min={startDate || todayLocal()} />
               </label>
               {error ? <p className="form-error">{error}</p> : null}
               <button className="primary-button" disabled={saving} type="submit">
@@ -655,6 +683,8 @@ function TaskDrawer({
   const [status, setStatus] = useState<TaskStatus>('todo');
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [dueDate, setDueDate] = useState('');
+  // 任务本身的开始日期，与截止日期并列；倒计时与开始日期独立。
+  const [startDate, setStartDate] = useState('');
   const [sectionError, setSectionError] = useState('');
   const [subtaskTitle, setSubtaskTitle] = useState('');
   const [timeMinutes, setTimeMinutes] = useState('30');
@@ -670,6 +700,7 @@ function TaskDrawer({
     setStatus(task.status);
     setPriority(task.priority);
     setDueDate(task.due_date || '');
+    setStartDate(task.start_date || '');
     setDirty(false);
     setEditingEntryId(null);
     setError('');
@@ -690,6 +721,7 @@ function TaskDrawer({
           description,
           priority,
           due_date: dueDate || null,
+          start_date: startDate || null,
           status,
           project_id: projectId,
         },
@@ -899,10 +931,23 @@ function TaskDrawer({
                 </select>
               </label>
               <label>
+                开始日期
+                <input
+                  type="date"
+                  value={startDate}
+                  disabled={readOnly}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setDirty(true);
+                  }}
+                />
+              </label>
+              <label>
                 截止日期
                 <input
                   type="date"
                   value={dueDate}
+                  min={startDate || undefined}
                   disabled={readOnly}
                   onChange={(e) => {
                     setDueDate(e.target.value);
@@ -911,6 +956,9 @@ function TaskDrawer({
                 />
               </label>
             </div>
+            {task ? (
+              <CountdownTimer task={task} readOnly={readOnly} />
+            ) : null}
             <label>
               描述
               <textarea
@@ -1097,4 +1145,25 @@ function TaskDrawer({
       </section>
     </div>
   );
+}
+
+/**
+ * 看板/列表上任务卡里的小倒计时角标：只在计时正在跑时显示，
+ * 实时显示剩余 mm:ss。驱动每秒 re-render（用 useCountdown），
+ * 到点不在这里落账（落账由抽屉里的 CountdownTimer 负责——
+ * 卡片角标只是展示，避免一处计时在两处都 try-finish 造成重复）。
+ */
+function CardCountdownChip({
+  task,
+  asText,
+}: {
+  task: TaskWithMeta;
+  asText?: boolean;
+}) {
+  const remaining = useCountdown(task);
+  const m = Math.floor(remaining / 60);
+  const s = remaining % 60;
+  const text = `⏱ ${m}:${String(s).padStart(2, '0')}`;
+  if (asText) return <>{text}</>;
+  return <span className="pb-meta-cd">{text}</span>;
 }

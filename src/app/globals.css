@@ -596,9 +596,22 @@ body {
   text-align: left;
   cursor: pointer;
   padding: 0;
-  overflow: hidden;
+  /* overflow must stay visible so the .project-card-menu-pop (absolute,
+     downward) isn't clipped — "删除项目" otherwise shows only its top half. */
+  overflow: visible;
   width: 100%;
   transition: border-color var(--life-control), box-shadow var(--life-control), transform var(--life-control);
+}
+
+/* Left color rail. Kept rounded on the left corners to match the card, since
+   the card no longer clips children with overflow:hidden. */
+.project-card-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 5px;
+  border-radius: var(--life-radius) 0 0 var(--life-radius);
 }
 
 .projects-grid {
@@ -617,7 +630,7 @@ body {
 .project-card-body {
   display: flex;
   flex-direction: column;
-  padding: 16px 20px 20px;
+  padding: 16px 20px 20px 25px;
   flex: 1;
 }
 
@@ -1366,6 +1379,10 @@ body {
   gap: 20px;
 }
 
+.td-hero-text {
+  min-width: 0;
+}
+
 .td-hero h1 {
   margin: 0;
   max-width: 18ch;
@@ -1411,14 +1428,14 @@ body {
   background: #e11d48;
 }
 
-.td-metrics {
+.td-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
 
-.td-metric {
+.td-stat {
   background: #fff;
   border: 1px solid var(--life-line);
   border-radius: 14px;
@@ -1426,14 +1443,7 @@ body {
   min-height: 92px;
 }
 
-.td-metric span {
-  display: block;
-  color: var(--life-muted);
-  font-size: 12px;
-  font-weight: 550;
-}
-
-.td-metric strong {
+.td-stat-value {
   display: block;
   margin-top: 12px;
   color: var(--life-ink);
@@ -1444,7 +1454,25 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.td-stat-label {
+  display: block;
+  color: var(--life-muted);
+  font-size: 12px;
+  font-weight: 550;
+}
+
 .td-board {
+  margin-bottom: 28px;
+}
+
+.td-board-note {
+  margin: 0 0 12px;
+  color: var(--life-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.td-board-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
@@ -1522,18 +1550,19 @@ body {
   color: #9f1239;
 }
 
-.td-empty-line,
-.td-more,
-.td-more-link {
-  margin: 10px 4px 8px;
+.td-panel-empty {
+  margin: 8px 4px 12px;
   color: var(--life-muted);
   font-size: 13px;
   line-height: 1.5;
 }
 
 .td-more-link {
+  margin: 10px 4px 8px;
   display: inline-block;
-  color: var(--life-accent);
+  color: var(--life-muted);
+  font-size: 13px;
+  line-height: 1.5;
   text-decoration: none;
 }
 
@@ -1754,29 +1783,67 @@ body {
 }
 
 .td-empty {
-  max-width: 480px;
+  max-width: 560px;
   background: #fff;
   border: 1px solid var(--life-line);
   border-radius: 18px;
-  padding: 36px 28px;
+  padding: 32px 28px;
+  display: flex;
+  align-items: center;
+  gap: 28px;
 }
 
-.td-empty-icon {
-  width: 36px;
-  height: 36px;
-  margin-bottom: 16px;
-  border-radius: 12px;
-  background: var(--life-accent-soft);
-  border: 1px solid rgba(15, 118, 110, 0.16);
+/* 空态插画：一摞"待办卡"的抽象拼贴，低饱色块叠放。 */
+.td-empty-scene {
+  flex-shrink: 0;
   position: relative;
+  width: 92px;
+  height: 92px;
 }
 
-.td-empty-icon::after {
-  content: '';
+.td-empty-scene > span {
   position: absolute;
-  inset: 12px;
-  border-radius: 999px;
+  border-radius: 10px;
+}
+
+.td-empty-stack {
+  left: 6px;
+  bottom: 4px;
+  width: 74px;
+  height: 46px;
+  background: var(--life-soft);
+  border: 1px solid var(--life-line);
+}
+
+.td-empty-mark {
+  left: 58px;
+  bottom: 40px;
+  width: 26px;
+  height: 26px;
+  background: var(--life-accent-soft);
+  border: 1px solid rgba(15, 118, 110, 0.2);
+}
+
+.td-empty-rail {
+  left: 10px;
+  bottom: 0;
+  width: 44px;
+  height: 8px;
+  background: #fff;
+  border: 1px solid var(--life-line);
+}
+
+.td-empty-rail.is-tall {
+  left: 18px;
+  bottom: 14px;
+  height: 30px;
+  width: 6px;
   background: var(--life-accent);
+  border: none;
+}
+
+.td-empty-body {
+  min-width: 0;
 }
 
 .td-empty h2 {
@@ -2255,6 +2322,104 @@ body {
 .pb-meta-date.is-over { color: #9f1239; font-weight: 650; }
 .pb-meta-sub,
 .pb-meta-min { font-variant-numeric: tabular-nums; }
+
+.pb-meta-cd {
+  font-variant-numeric: tabular-nums;
+  margin-top: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+  background: var(--life-accent-soft);
+  color: #0f766e;
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  display: inline-block;
+}
+
+/* === 倒计时器（drawer 内） ===
+ * .cd = 整块容器；.is-running 时加 accent 描边表示在跑；
+ * .is-due 红色示意到点。
+ */
+.cd {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  align-items: center;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--life-line);
+  border-radius: 14px;
+  background: #fff;
+  transition: border-color var(--life-control), background var(--life-control);
+}
+
+.cd.is-running {
+  border-color: rgba(15, 118, 110, 0.35);
+  background:
+    linear-gradient(180deg, rgba(15, 118, 110, 0.05), transparent 60%),
+    #fff;
+}
+
+.cd.is-due {
+  border-color: rgba(190, 18, 60, 0.4);
+  background:
+    linear-gradient(180deg, rgba(190, 18, 60, 0.06), transparent 60%),
+    #fff;
+}
+
+.cd-ro {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.cd-time {
+  grid-row: span 2;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--life-ink);
+  line-height: 1;
+  min-width: 4ch;
+}
+
+.cd.is-due .cd-time { color: #9f1239; }
+
+.cd-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 8px;
+  color: var(--life-muted);
+  font-size: 12.5px;
+}
+
+.cd-elapsed {
+  font-variant-numeric: tabular-nums;
+}
+
+.cd-target-input {
+  width: 64px;
+  margin: 0 4px;
+  padding: 3px 6px;
+  border: 1px solid var(--life-line);
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--life-ink);
+  background: #fff;
+}
+.cd-target-input:disabled {
+  background: var(--life-soft);
+  color: var(--life-muted);
+}
+
+.cd-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.cd-actions .pb-ghost { padding: 6px 12px; font-size: 12.5px; }
 
 .pb-empty {
   margin: 2px 2px 4px;
@@ -3128,22 +3293,23 @@ body {
   .pb-list-date { grid-area: date; justify-self: end; }
   .pb-list-min { grid-area: min; justify-self: end; }
 
-  .td-metrics {
+  .td-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
 
-  .td-metric {
+  .td-stat {
     min-height: 76px;
     padding: 12px 14px;
   }
 
-  .td-metric strong {
+  .td-stat-value {
     margin-top: 8px;
     font-size: 21px;
   }
 
   .td-board,
+  .td-board-grid,
   .td-proj-grid {
     grid-template-columns: 1fr;
   }

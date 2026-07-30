@@ -34,7 +34,14 @@ export interface Task {
   status: TaskStatus;
   priority: TaskPriority;
   due_date: string | null;
+  start_date: string | null;
   position: number;
+  // 倒计时运行态。target_minutes = 目标时长（默认 25，可改）；
+  // started_at = 本次运行起算时刻（运行中 ISO 字符串，暂停为 null）；
+  // elapsed_seconds = 之前累计已专注秒数（暂停保留，运行中=acc+(now-started_at)）
+  target_minutes: number;
+  started_at: string | null;
+  elapsed_seconds: number;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
