@@ -28,11 +28,11 @@ jobs:
           node-version: 22
           cache: npm
 
-      # Skip the Electron binary download: this workflow only builds the static
-      # web export, never the desktop app, so the Electron runtime isn't needed
-      # and fetching it from GitHub releases is a flaky failure point.
-      - run: npm ci
+      - run: npm install --no-audit --no-fund --omit=optional
         env:
+          # Skip the Electron binary download: this workflow only builds the static
+          # web export, never the desktop app, so the Electron runtime isn't needed
+          # and fetching it from GitHub releases is a flaky failure point.
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
       # The static export: `next build` writes the hostable site to ./out.
