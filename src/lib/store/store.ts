@@ -1,0 +1,106 @@
+import type {
+  Project,
+  ProjectTimeEntry,
+  Subtask,
+  Task,
+  TimeEntry,
+} from '@/types/project';
+
+/**
+ * Client-side persistence envelope for the static export build.
+ * Mirrors the server `BackupPayload` shape: the five base entity tables.
+ * Derived types (ProjectSummary / TaskWithMeta / TodayGroups / WeekStats)
+ * are computed on read, never stored.
+ */
+export interface ClarityDB {
+  version: 1;
+  projects: Project[];
+  tasks: Task[];
+  subtasks: Subtask[];
+  timeEntries: TimeEntry[];
+  projectTimeEntries: ProjectTimeEntry[];
+}
+
+const STORAGE_KEY = 'clarity-db';
+
+export function emptyDB(): ClarityDB {
+  return {
+    version: 1,
+    projects: [],
+    tasks: [],
+    subtasks: [],
+    timeEntries: [],
+    projectTimeEntries: [],
+  };
+}
+
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+/**
+ * Read the database from localStorage. Safe during SSR / static pre-render:
+ * returns an empty DB when `window` is unavailable so the export render
+ * does not touch the filesystem. Callers must treat the result as read-only
+ * and always go through `saveDB` to persist mutations.
+ */
+export function loadDB(): ClarityDB {
+  if (typeof window === 'undefined') return emptyDB();
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return emptyDB();
+    const parsed = JSON.parse(raw) as Partial<ClarityDB>;
+    return {
+      version: 1,
+      projects: Array.isArray(parsed.projects) ? parsed.projects : [],
+      tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
+      subtasks: Array.isArray(parsed.subtasks) ? parsed.subtasks : [],
+      timeEntries: Array.isArray(parsed.timeEntries) ? parsed.timeEntries : [],
+      projectTimeEntries: Array.isArray(parsed.projectTimeEntries)
+        ? parsed.projectTimeEntries
+        : [],
+    };
+  } catch {
+    return emptyDB();
+  }
+}
+
+export function saveDB(db: ClarityDB): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+}
+
+export function resetDB(): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(STORAGE_KEY);
+}
+
+/** Browser-native UUID; fallback for older environments. */
+export function uuid(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+/** ISO timestamp in the same shape as the server `nowIso`. */
+export function nowIso(): string {
+  return new Date().toISOString();
+}
+
+/** Today as YYYY-MM-DD in the device local timezone. */
+export function todayStr(date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** Deep clone helper for callers that need a private mutable copy. */
+export function cloneDB(db: ClarityDB): ClarityDB {
+  return clone(db);
+}

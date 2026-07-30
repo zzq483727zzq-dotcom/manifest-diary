@@ -1,14 +1,11 @@
-import { redirect } from 'next/navigation';
-import { hasLocalPassword, hasLocalSession } from '@/lib/local-auth';
 import { DashboardShell } from '@/components/dashboard/DashboardShell';
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  if (!hasLocalPassword()) redirect('/setup');
-  if (!(await hasLocalSession())) redirect('/unlock');
-
-  return (
-    <DashboardShell userEmail="本地用户">
-      {children}
-    </DashboardShell>
-  );
+/**
+ * Static export build: no password lock and no per-request session (those
+ * belonged to the SQLite-backed build, which read the filesystem via
+ * next/headers). The workbench is open to anyone; data lives in each
+ * visitor's browser localStorage.
+ */
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return <DashboardShell>{children}</DashboardShell>;
 }

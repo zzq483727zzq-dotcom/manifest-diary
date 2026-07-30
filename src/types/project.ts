@@ -104,3 +104,33 @@ export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
   medium: '中',
   high: '高',
 };
+
+// --- Derived shapes shared by both the server (SQLite) and client
+// (localStorage) repositories. Living here (not in either repository file)
+// keeps client components from importing a server-only module just for a
+// type.
+
+export interface TodayGroups {
+  overdue: TaskWithMeta[];
+  dueToday: TaskWithMeta[];
+  highSoon: TaskWithMeta[];
+  inProgress: TaskWithMeta[];
+}
+
+export interface WeekStats {
+  completedThisWeek: number;
+  createdOrOpenThisWeek: number;
+  completionRate: number;
+  minutesThisWeek: number;
+  activeProjects: number;
+}
+
+export interface BackupPayload {
+  version: 1;
+  exported_at: string;
+  projects: Project[];
+  tasks: Task[];
+  subtasks: Subtask[];
+  timeEntries: TimeEntry[];
+  projectTimeEntries?: ProjectTimeEntry[];
+}

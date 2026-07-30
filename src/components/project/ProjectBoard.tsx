@@ -18,6 +18,35 @@ import {
   TASK_STATUS_LABELS,
 } from '@/types/project';
 import { formatMinutes, localDateString } from '@/lib/project/date';
+import { useStore, mutate } from '@/lib/store/useStore';
+import {
+  createProjectTimeEntry,
+  createSubtask,
+  createTask,
+  createTimeEntry,
+  deleteProject as deleteProjectRepo,
+  deleteProjectTimeEntry,
+  deleteSubtask,
+  deleteTask,
+  deleteTimeEntry,
+  getTask,
+  listProjectTimeEntries,
+  listSubtasks,
+  listTasks,
+  listTimeEntries,
+  moveSubtask,
+  updateProjectTimeEntry,
+  updateSubtask,
+  updateTask,
+  updateTimeEntry,
+} from '@/lib/store/repository';
+import {
+  parseProjectTimeEntryInput,
+  parseSubtaskInput,
+  parseTaskInput,
+  parseTimeEntryInput,
+} from '@/lib/project/validation';
+import type { TaskInput } from '@/lib/project/validation';
 
 const COLUMNS: TaskStatus[] = ['todo', 'in_progress', 'completed'];
 
@@ -51,8 +80,12 @@ export function ProjectBoard({
   initialTaskId?: string;
 }) {
   const router = useRouter();
+  const db = useStore();
   const [view, setView] = useState<'board' | 'list'>('board');
-  const [tasks, setTasks] = useState(initialTasks);
+  const tasks = useMemo(() => {
+    const live = listTasks(db, project.id);
+    return live.length ? live : initialTasks;
+  }, [db, project.id, initialTasks]);
   const [listFilter, setListFilter] = useState<'all' | 'open' | 'completed'>('all');
   const [createOpen, setCreateOpen] = useState(false);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(initialTaskId ?? null);
@@ -65,7 +98,7 @@ export function ProjectBoard({
   const [expandedCompleted, setExpandedCompleted] = useState(false);
   const [timeOpen, setTimeOpen] = useState(false);
   const [deletingProject, setDeletingProject] = useState(false);
-  const [projectMinutes, setProjectMinutes] = useState(0);
+  const [projectMinutes, setProjectMinutes] = useState(project.minutes_total);
 
   useEffect(() => {
     const stored = window.localStorage.getItem('clarity-project-view');
@@ -101,38 +134,29 @@ export function ProjectBoard({
     return sorted;
   }, [tasks, listFilter]);
 
-  async function refreshTasks() {
-    const res = await fetch(`/api/tasks?projectId=${project.id}`);
-    const body = await res.json();
-    if (res.ok) setTasks(body.tasks ?? []);
-    router.refresh();
-  }
-
-  async function createTask(event: React.FormEvent) {
+  function createTaskFn(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true);
     setError('');
     try {
-      const res = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          project_id: project.id,
-          title,
-          description,
-          priority,
-          due_date: dueDate || null,
-        }),
+      const input = parseTaskInput({
+        project_id: project.id,
+        title,
+        description,
+        priority,
+        due_date: dueDate || null,
+      }) as TaskInput;
+      let createdId = '';
+      mutate((draft) => {
+        const created = createTask(draft, input);
+        createdId = created.id;
       });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || '创建失败');
       setCreateOpen(false);
       setTitle('');
       setDescription('');
       setPriority('medium');
       setDueDate('');
-      await refreshTasks();
-      setDrawerTaskId(body.task.id);
+      setDrawerTaskId(createdId);
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建失败');
     } finally {
@@ -141,7 +165,7 @@ export function ProjectBoard({
   }
 
   // 三态循环：待办 → 进行中 → 已完成 → 待办。让看板能显式切换到「进行中」。
-  async function cycleStatus(task: TaskWithMeta) {
+  function cycleStatus(task: TaskWithMeta) {
     const order: TaskStatus[] = ['todo', 'in_progress', 'completed'];
     const nextStatus = order[(order.indexOf(task.status) + 1) % order.length];
     if (
@@ -151,25 +175,26 @@ export function ProjectBoard({
     ) {
       if (!window.confirm('还有未完成的子任务，确定把父任务标为已完成吗？')) return;
     }
-    const res = await fetch(`/api/tasks/${task.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ status: nextStatus }),
-    });
-    if (res.ok) await refreshTasks();
+    try {
+      mutate((draft) => {
+        updateTask(draft, task.id, { status: nextStatus });
+      });
+    } catch {
+      // silent: status toggle is best-effort
+    }
   }
 
   function openTask(taskId: string) {
     setDrawerTaskId(taskId);
-    router.replace(`/projects/${project.id}?task=${taskId}`);
+    router.replace(`/projects/detail?id=${project.id}&task=${taskId}`);
   }
 
   function closeDrawer() {
     setDrawerTaskId(null);
-    router.replace(`/projects/${project.id}`);
+    router.replace(`/projects/detail?id=${project.id}`);
   }
 
-  async function deleteProject() {
+  function deleteProject() {
     if (
       !window.confirm(
         `确定删除项目「${project.name}」吗？项目下的任务、子任务和全部耗时记录都会一起删除，且无法撤销。`,
@@ -179,11 +204,10 @@ export function ProjectBoard({
     }
     setDeletingProject(true);
     try {
-      const res = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || '删除失败');
+      mutate((draft) => {
+        deleteProjectRepo(draft, project.id);
+      });
       router.replace('/projects');
-      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除失败');
     } finally {
@@ -269,7 +293,6 @@ export function ProjectBoard({
         <ProjectTimeSection
           projectId={project.id}
           readOnly={project.status === 'archived'}
-          onChanged={() => router.refresh()}
           onMinutesChange={refreshProjectMinutes}
         />
       ) : null}
@@ -412,7 +435,7 @@ export function ProjectBoard({
               ×
             </button>
             <h2>给这个项目加一步行动</h2>
-            <form className="stack-form" onSubmit={createTask}>
+            <form className="stack-form" onSubmit={createTaskFn}>
               <label>
                 标题
                 <input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={120} autoFocus />
@@ -447,7 +470,6 @@ export function ProjectBoard({
           taskId={drawerTaskId}
           projectId={project.id}
           onClose={closeDrawer}
-          onChanged={refreshTasks}
         />
       ) : null}
     </div>
@@ -458,66 +480,49 @@ export function ProjectBoard({
 function ProjectTimeSection({
   projectId,
   readOnly,
-  onChanged,
   onMinutesChange,
 }: {
   projectId: string;
   readOnly: boolean;
-  onChanged: () => void;
   onMinutesChange: (total: number) => void;
 }) {
-  const [entries, setEntries] = useState<ProjectTimeEntry[]>([]);
+  const db = useStore();
+  const entries = useMemo(
+    () => listProjectTimeEntries(db, projectId),
+    [db, projectId],
+  );
   const [minutes, setMinutes] = useState('30');
   const [date, setDate] = useState(localDateString());
   const [note, setNote] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  async function load() {
-    const res = await fetch(`/api/projects/${projectId}/time-entries`);
-    const body = await res.json();
-    if (!res.ok) {
-      setError(body.error || '加载耗时失败');
-      return;
-    }
-    setEntries(body.timeEntries ?? []);
-    const total = (body.timeEntries ?? []).reduce((sum: number, item: ProjectTimeEntry) => sum + item.minutes, 0);
-    onMinutesChange(total);
-  }
-
   useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId]);
+    const total = entries.reduce((sum, item) => sum + item.minutes, 0);
+    onMinutesChange(total);
+  }, [entries, onMinutesChange]);
 
-  async function save(event: React.FormEvent) {
+  function save(event: React.FormEvent) {
     event.preventDefault();
     if (readOnly) return;
     setError('');
-    const payload = {
-      minutes: Number(minutes),
-      logged_date: date,
-      note,
-    };
-    const res = await fetch(
-      editingId ? `/api/project-time-entries/${editingId}` : `/api/projects/${projectId}/time-entries`,
-      {
-        method: editingId ? 'PATCH' : 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-      },
-    );
-    const body = await res.json();
-    if (!res.ok) {
-      setError(body.error || '保存耗时失败');
-      return;
+    const today = localDateString();
+    try {
+      const input = parseProjectTimeEntryInput(
+        { minutes: Number(minutes), logged_date: date, note },
+        today,
+      );
+      mutate((draft) => {
+        if (editingId) updateProjectTimeEntry(draft, editingId, input);
+        else createProjectTimeEntry(draft, projectId, input);
+      });
+      setMinutes('30');
+      setDate(localDateString());
+      setNote('');
+      setEditingId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存耗时失败');
     }
-    setMinutes('30');
-    setDate(localDateString());
-    setNote('');
-    setEditingId(null);
-    await load();
-    onChanged();
   }
 
   function startEdit(entry: ProjectTimeEntry) {
@@ -527,13 +532,16 @@ function ProjectTimeSection({
     setNote(entry.note || '');
   }
 
-  async function remove(entryId: string) {
+  function remove(entryId: string) {
     if (readOnly) return;
     if (!window.confirm('确定删除这条耗时记录吗？')) return;
-    const res = await fetch(`/api/project-time-entries/${entryId}`, { method: 'DELETE' });
-    if (!res.ok) return;
-    await load();
-    onChanged();
+    try {
+      mutate((draft) => {
+        deleteProjectTimeEntry(draft, entryId);
+      });
+    } catch {
+      // silent
+    }
   }
 
   return (
@@ -629,14 +637,16 @@ function TaskDrawer({
   taskId,
   projectId,
   onClose,
-  onChanged,
 }: {
   taskId: string;
   projectId: string;
   onClose: () => void;
-  onChanged: () => Promise<void>;
 }) {
-  const [loading, setLoading] = useState(true);
+  const db = useStore();
+  const task = useMemo(() => getTask(db, taskId), [db, taskId]);
+  const subtasks = useMemo(() => listSubtasks(db, taskId), [db, taskId]);
+  const timeEntries = useMemo(() => listTimeEntries(db, taskId), [db, taskId]);
+
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState('');
@@ -645,69 +655,50 @@ function TaskDrawer({
   const [status, setStatus] = useState<TaskStatus>('todo');
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [dueDate, setDueDate] = useState('');
-  const [minutesTotal, setMinutesTotal] = useState(0);
-  const [projectStatus, setProjectStatus] = useState<string>('active');
-  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
-  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
+  const [sectionError, setSectionError] = useState('');
   const [subtaskTitle, setSubtaskTitle] = useState('');
   const [timeMinutes, setTimeMinutes] = useState('30');
   const [timeDate, setTimeDate] = useState(localDateString());
   const [timeNote, setTimeNote] = useState('');
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
-  const [sectionError, setSectionError] = useState('');
-  const readOnly = projectStatus === 'archived';
 
-  async function load() {
-    setLoading(true);
+  // Seed form fields once a task is available (or when taskId changes).
+  useEffect(() => {
+    if (!task) return;
+    setTitle(task.title);
+    setDescription(task.description || '');
+    setStatus(task.status);
+    setPriority(task.priority);
+    setDueDate(task.due_date || '');
+    setDirty(false);
+    setEditingEntryId(null);
     setError('');
     setSectionError('');
-    try {
-      const res = await fetch(`/api/tasks/${taskId}`);
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || '加载失败');
-      setTitle(body.task.title);
-      setDescription(body.task.description || '');
-      setStatus(body.task.status);
-      setPriority(body.task.priority);
-      setDueDate(body.task.due_date || '');
-      setMinutesTotal(body.task.minutes_total || 0);
-      setProjectStatus(body.task.project_status || 'active');
-      setSubtasks(body.subtasks ?? []);
-      setTimeEntries(body.timeEntries ?? []);
-      setDirty(false);
-      setEditingEntryId(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '加载失败');
-    } finally {
-      setLoading(false);
-    }
-  }
+  }, [task]);
 
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId]);
+  const minutesTotal = task?.minutes_total ?? 0;
+  const projectStatus = task?.project_status ?? 'active';
+  const readOnly = projectStatus === 'archived';
 
-  async function save() {
+  function save() {
     setSaving(true);
     setError('');
     try {
-      const res = await fetch(`/api/tasks/${taskId}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
+      const patch = parseTaskInput(
+        {
           title,
           description,
           priority,
           due_date: dueDate || null,
           status,
           project_id: projectId,
-        }),
+        },
+        true,
+      );
+      mutate((draft) => {
+        updateTask(draft, taskId, patch);
       });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || '保存失败');
       setDirty(false);
-      await onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败');
     } finally {
@@ -715,7 +706,7 @@ function TaskDrawer({
     }
   }
 
-  async function quickStatus(next: TaskStatus) {
+  function quickStatus(next: TaskStatus) {
     if (
       next === 'completed' &&
       subtasks.some((item) => !item.is_done)
@@ -723,108 +714,98 @@ function TaskDrawer({
       if (!window.confirm('还有未完成的子任务，确定把父任务标为已完成吗？')) return;
     }
     setStatus(next);
-    const res = await fetch(`/api/tasks/${taskId}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ status: next }),
-    });
-    if (res.ok) {
+    try {
+      mutate((draft) => {
+        updateTask(draft, taskId, { status: next });
+      });
       setDirty(false);
-      await onChanged();
+    } catch {
+      // silent
     }
   }
 
-  async function removeTask() {
+  function removeTask() {
     if (!window.confirm('确定删除这个任务吗？子任务和耗时会一起删除。')) return;
-    const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
-    if (res.ok) {
-      await onChanged();
+    try {
+      mutate((draft) => {
+        deleteTask(draft, taskId);
+      });
       onClose();
+    } catch {
+      // silent
     }
   }
 
-  async function addSubtask(event: React.FormEvent) {
+  function addSubtask(event: React.FormEvent) {
     event.preventDefault();
     if (readOnly) return;
     setSectionError('');
-    const res = await fetch(`/api/tasks/${taskId}/subtasks`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: subtaskTitle }),
-    });
-    const body = await res.json();
-    if (!res.ok) {
-      setSectionError(body.error || '添加子任务失败');
-      return;
+    try {
+      const input = parseSubtaskInput({ title: subtaskTitle });
+      mutate((draft) => {
+        createSubtask(draft, taskId, input);
+      });
+      setSubtaskTitle('');
+    } catch (err) {
+      setSectionError(err instanceof Error ? err.message : '添加子任务失败');
     }
-    setSubtaskTitle('');
-    setSubtasks((prev) => [...prev, body.subtask]);
-    await onChanged();
   }
 
-  async function toggleSubtask(subtask: Subtask) {
+  function toggleSubtask(subtask: Subtask) {
     if (readOnly) return;
-    const res = await fetch(`/api/subtasks/${subtask.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ is_done: !subtask.is_done }),
-    });
-    if (!res.ok) return;
-    const body = await res.json();
-    setSubtasks((prev) => prev.map((item) => (item.id === subtask.id ? body.subtask : item)));
-    await onChanged();
+    try {
+      mutate((draft) => {
+        updateSubtask(draft, subtask.id, { is_done: !subtask.is_done });
+      });
+    } catch {
+      // silent
+    }
   }
 
-  async function moveSubtaskItem(subtaskId: string, direction: 'up' | 'down') {
+  function moveSubtaskItem(subtaskId: string, direction: 'up' | 'down') {
     if (readOnly) return;
-    const res = await fetch(`/api/subtasks/${subtaskId}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ move: direction }),
-    });
-    if (!res.ok) return;
-    const listRes = await fetch(`/api/tasks/${taskId}/subtasks`);
-    const body = await listRes.json();
-    if (listRes.ok) setSubtasks(body.subtasks ?? []);
+    try {
+      mutate((draft) => {
+        moveSubtask(draft, subtaskId, direction);
+      });
+    } catch {
+      // silent
+    }
   }
 
-  async function removeSubtask(subtaskId: string) {
+  function removeSubtask(subtaskId: string) {
     if (readOnly) return;
     if (!window.confirm('确定删除这个子任务吗？')) return;
-    const res = await fetch(`/api/subtasks/${subtaskId}`, { method: 'DELETE' });
-    if (!res.ok) return;
-    setSubtasks((prev) => prev.filter((item) => item.id !== subtaskId));
-    await onChanged();
+    try {
+      mutate((draft) => {
+        deleteSubtask(draft, subtaskId);
+      });
+    } catch {
+      // silent
+    }
   }
 
-  async function saveTimeEntry(event: React.FormEvent) {
+  function saveTimeEntry(event: React.FormEvent) {
     event.preventDefault();
     if (readOnly) return;
     setSectionError('');
-    const payload = {
-      minutes: Number(timeMinutes),
-      logged_date: timeDate,
-      note: timeNote,
-    };
-    const res = await fetch(
-      editingEntryId ? `/api/time-entries/${editingEntryId}` : `/api/tasks/${taskId}/time-entries`,
-      {
-        method: editingEntryId ? 'PATCH' : 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-      },
-    );
-    const body = await res.json();
-    if (!res.ok) {
-      setSectionError(body.error || '保存耗时失败');
-      return;
+    const today = localDateString();
+    try {
+      const input = parseTimeEntryInput(
+        { minutes: Number(timeMinutes), logged_date: timeDate, note: timeNote },
+        today,
+      );
+      mutate((draft) => {
+        if (editingEntryId) updateTimeEntry(draft, editingEntryId, input);
+        else createTimeEntry(draft, taskId, input);
+      });
+      setTimeMinutes('30');
+      setTimeDate(localDateString());
+      setTimeNote('');
+      setEditingEntryId(null);
+    } catch (err) {
+      setSectionError(err instanceof Error ? err.message : '保存耗时失败');
     }
-    setTimeMinutes('30');
-    setTimeDate(localDateString());
-    setTimeNote('');
-    setEditingEntryId(null);
-    await load();
-    await onChanged();
   }
 
   function startEditEntry(entry: TimeEntry) {
@@ -834,18 +815,34 @@ function TaskDrawer({
     setTimeNote(entry.note || '');
   }
 
-  async function removeTimeEntry(entryId: string) {
+  function removeTimeEntry(entryId: string) {
     if (readOnly) return;
     if (!window.confirm('确定删除这条耗时记录吗？')) return;
-    const res = await fetch(`/api/time-entries/${entryId}`, { method: 'DELETE' });
-    if (!res.ok) return;
-    await load();
-    await onChanged();
+    try {
+      mutate((draft) => {
+        deleteTimeEntry(draft, entryId);
+      });
+    } catch {
+      // silent
+    }
   }
 
   function requestClose() {
     if (dirty && !window.confirm('有未保存修改，确定放弃吗？')) return;
     onClose();
+  }
+
+  if (!task) {
+    return (
+      <div className="sheet-backdrop" onMouseDown={requestClose}>
+        <section className="drawer-panel wide" onMouseDown={(e) => e.stopPropagation()}>
+          <button type="button" className="sheet-close" onClick={requestClose}>
+            ×
+          </button>
+          <p className="muted">任务不存在。</p>
+        </section>
+      </div>
+    );
   }
 
   return (
@@ -854,17 +851,14 @@ function TaskDrawer({
         <button type="button" className="sheet-close" onClick={requestClose}>
           ×
         </button>
-        {!loading && !readOnly ? (
+        {!readOnly ? (
           <div className="drawer-topbar">
             <button type="button" className="danger-ghost" onClick={() => void removeTask()}>
               删除任务
             </button>
           </div>
         ) : null}
-                {loading ? (
-          <p className="muted">加载中…</p>
-        ) : (
-          <div className="stack-form">
+        <div className="stack-form">
             <label>
               标题
               <input
@@ -1100,7 +1094,6 @@ function TaskDrawer({
               </button>
             ) : null}
           </div>
-        )}
       </section>
     </div>
   );

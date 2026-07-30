@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { resetDB } from '@/lib/store/store';
 
 const items = [
   { href: '/', label: '今日' },
@@ -44,18 +45,18 @@ function NavIcon({ name }: { name: (typeof items)[number]['href'] }) {
 
 export function DashboardShell({
   children,
-  userEmail,
 }: {
   children: ReactNode;
-  userEmail: string;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
 
-  async function signOut() {
-    document.cookie = 'manifest-local-session=; Max-Age=0; path=/';
-    router.push('/unlock');
-    router.refresh();
+  function clearLocalData() {
+    if (
+      window.confirm('清除本浏览器中的全部本地数据？项目、任务、耗时都将从这台设备删除，且无法撤销。请先导出备份再继续。')
+    ) {
+      resetDB();
+      window.location.reload();
+    }
   }
 
   function isActive(href: string) {
@@ -92,13 +93,13 @@ export function DashboardShell({
             <span className="status-dot" />
             数据只在本机
           </div>
-          <small>{userEmail.split('@')[0]}</small>
+          <small>本地用户</small>
           <div className="sidebar-actions">
             <Link href="/settings" className="dashboard-signout">
               设置
             </Link>
-            <button className="dashboard-signout" onClick={signOut} type="button">
-              退出解锁
+            <button className="dashboard-signout" onClick={clearLocalData} type="button">
+              清除本机数据
             </button>
           </div>
         </div>

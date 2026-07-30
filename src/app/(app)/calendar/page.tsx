@@ -1,28 +1,28 @@
-import { listTasks } from '@/lib/project/repository';
+'use client';
+
+import { useMemo } from 'react';
+import { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useStore } from '@/lib/store/useStore';
+import { listTasks } from '@/lib/store/repository';
 import { localDateString } from '@/lib/project/date';
 import { CalendarWorkspace } from '@/components/project/CalendarWorkspace';
 
-export const dynamic = 'force-dynamic';
-
-interface PageProps {
-  searchParams: Promise<{
-    year?: string;
-    month?: string;
-    view?: string;
-    filter?: string;
-    day?: string;
-  }>;
-}
-
-export default async function CalendarPage({ searchParams }: PageProps) {
-  const query = await searchParams;
+function CalendarBody() {
+  const searchParams = useSearchParams();
+  const db = useStore();
   const today = localDateString();
   const [ty, tm] = today.split('-').map(Number);
-  const year = Number(query.year) || ty;
-  const month = Number(query.month) || tm;
-  const view = query.view === 'week' ? 'week' : 'month';
-  const filter = query.filter === 'open' ? 'open' : 'all';
-  const tasks = listTasks().filter((task) => task.project_status !== 'archived');
+  const year = Number(searchParams.get('year')) || ty;
+  const month = Number(searchParams.get('month')) || tm;
+  const view = searchParams.get('view') === 'week' ? 'week' : 'month';
+  const filter = searchParams.get('filter') === 'open' ? 'open' : 'all';
+  const day = searchParams.get('day') ?? undefined;
+
+  const tasks = useMemo(
+    () => listTasks(db).filter((task) => task.project_status !== 'archived'),
+    [db],
+  );
 
   return (
     <CalendarWorkspace
@@ -31,7 +31,16 @@ export default async function CalendarPage({ searchParams }: PageProps) {
       initialMonth={month}
       initialView={view}
       initialFilter={filter}
-      initialSelected={query.day}
+      initialSelected={day}
     />
+  );
+}
+
+export default function CalendarPage() {
+  // `useSearchParams` requires a Suspense boundary in a statically rendered page.
+  return (
+    <Suspense fallback={null}>
+      <CalendarBody />
+    </Suspense>
   );
 }

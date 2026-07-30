@@ -54,6 +54,8 @@ data-test-project/
 # stray folder
 /显化日记
 /.superpowers
+# local issue-tracking scratch notes, not source
+/.scratch/
 # plan docs are working files, not source
 /docs/superpowers/plans
 

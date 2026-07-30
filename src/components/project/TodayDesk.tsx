@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import type { ProjectSummary, TaskWithMeta } from '@/types/project';
 import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from '@/types/project';
 import { formatMinutes } from '@/lib/project/date';
-import type { TodayGroups, WeekStats } from '@/lib/project/repository';
+import type { TodayGroups, WeekStats } from '@/types/project';
+import { mutate } from '@/lib/store/useStore';
+import { updateTask } from '@/lib/store/repository';
 
 const GROUPS: Array<{
   key: keyof TodayGroups;
@@ -34,27 +35,22 @@ export function TodayDesk({
   stats: WeekStats;
   projects: ProjectSummary[];
 }) {
-  const router = useRouter();
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
 
-  async function completeTask(task: TaskWithMeta) {
+  function completeTask(task: TaskWithMeta) {
     if (busyTaskId) return;
     setBusyTaskId(task.id);
     try {
-      const response = await fetch(`/api/tasks/${task.id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
+      mutate((db) => {
+        updateTask(db, task.id, {
           title: task.title,
           description: task.description,
           status: task.status === 'completed' ? 'todo' : 'completed',
           priority: task.priority,
           due_date: task.due_date,
           project_id: task.project_id,
-        }),
+        });
       });
-      if (!response.ok) throw new Error('任务更新失败');
-      router.refresh();
     } catch {
       window.alert('任务更新失败，请稍后重试。');
     } finally {
@@ -187,7 +183,7 @@ export function TodayDesk({
             </header>
             <div className="td-proj-grid">
               {projects.slice(0, 4).map((p) => (
-                <Link key={p.id} href={`/projects/${p.id}`} className="td-proj">
+                <Link key={p.id} href={`/projects/detail?id=${p.id}`} className="td-proj">
                   <div className="td-proj-top">
                     <span className="td-swatch" style={{ background: p.color }} aria-hidden />
                     <strong>{p.name}</strong>
@@ -234,7 +230,7 @@ function TaskRow({
       >
         {task.status === 'completed' ? '✓' : ''}
       </button>
-      <Link href={`/projects/${task.project_id}?task=${task.id}`} className="td-row-link">
+      <Link href={`/projects/detail?id=${task.project_id}&task=${task.id}`} className="td-row-link">
         <strong>{task.title}</strong>
         <small>
           <span className="td-swatch sm" style={{ background: task.project_color }} aria-hidden />
@@ -256,7 +252,7 @@ function TaskRow({
           {task.minutes_total > 0 ? formatMinutes(task.minutes_total) : '—'}
         </time>
         <Link
-          href={`/projects/${task.project_id}?task=${task.id}`}
+          href={`/projects/detail?id=${task.project_id}&task=${task.id}`}
           className="td-open"
           aria-label={`打开任务：${task.title}`}
         >

@@ -1,0 +1,30 @@
+Design a flat UI layout comp (NOT a photo, NOT 3D, a static web app screenshot) for a personal project execution app's TODAY home screen, called "Clarity".
+
+CRITICAL: This is a flat product UI screenshot, not a photo. No photographic textures, no lens blur, no mockup hardware. Just clean flat web app pixels. Light theme only.
+
+Layout: project-centric two-column desktop (1440x960). Left 60% = today's task list. Right 40% = "active projects" big cards.
+
+Design system (Cool Fog Desk, MUST follow exactly):
+- Background: fog canvas #F3F5F7. Panels: white #FFFFFF. Soft surface: #E8ECF1.
+- Ink text: #0F172A near-black. Muted: #64748B slate. Hairline borders: rgba(15,23,42,0.09).
+- ONE accent only: teal #0F766E (with soft tint rgba(15,118,110,0.12)). No purple, no gold.
+- System sans font (like Segoe UI / SF / Geist). NO serif. NO italic.
+- Corner radius: cards 14px, controls 10px, pills 999px. One system only.
+- Shadows: hairline border first, only soft shadow 0 1px 2px + 0 12px 32px rgba(15,23,42,0.06) on the big project cards. No glow halos. No gradients. No gradient text.
+
+LEFT COLUMN (60%) content:
+- Top: small date line "2026年7月29日 · 周三" in muted slate, left aligned. Below it a bold 28px title "今日行动".
+- A four-group task list, each group has a slim group label and 2-3 task rows:
+  1) "已逾期" (overdue) — label tinted rose #BE123C. Task row shows a small status pill (待办/进行中/已完成), task title bold, a tiny rose priority dot for high, due date muted.
+  2) "今天到期" (due today) — label teal accent. 3 task rows.
+  3) "未来 3 天高优" (high soon) — neutral muted label. 2 rows.
+  4) "进行中" (in progress) — neutral. 2 rows with the teal "进行中" status pill.
+- Each task row: status pill on far left, title, then on the right small meta "子任务 2/3 · 45分钟" in 12px muted. Dividers are 1px hairlines between rows only (no card boxes around rows).
+
+RIGHT COLUMN (40%) "进行中项目":
+- Section label "进行中项目" small muted, top.
+- 2 big project cards stacked vertically, each white panel 14px radius, soft shadow:
+  - Card has a 4px left color bar (one teal, one sky #38BDF8), project name bold 16px, a one-line description muted, a thin progress bar (teal fill on #E8ECF1 track) with "进度 4/7" text, and a "本周投入 3h 20m" meta line.
+- Below the cards, a compact 4-stat strip in 2x2 grid: 本周完成 5, 进行中项目 2, 本周完成率 71%, 本周投入 8h. Each stat: big 24px number ink + 12px muted label. No boxes, just hairline-separated.
+
+Vibe: Linear/Things-grade calm execution tool. Dense but breathing. No marketing eyebrows, no section numbers, no emojis. Pure product UI. The accent removed, hierarchy and spacing alone still read as a serious tool.

@@ -303,7 +303,7 @@ export function CalendarWorkspace({
                 return (
                   <Link
                     key={task.id}
-                    href={`/projects/${task.project_id}?task=${task.id}`}
+                    href={`/projects/detail?id=${task.project_id}&task=${task.id}`}
                     className={[
                       'day-panel-item',
                       task.status === 'completed' ? 'done' : '',

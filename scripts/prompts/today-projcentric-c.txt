@@ -1,0 +1,26 @@
+Design a flat UI layout comp (NOT a photo, NOT 3D, a static web app screenshot) for a personal project execution app's TODAY home screen, called "Clarity".
+
+CRITICAL: flat product UI screenshot, not a photo. Light theme only. No photographic / 3D / mockup textures.
+
+Layout: project-centric two-column desktop (1440x960). Variant C: left column uses a "card-per-priority" compact treatment where each today task is a small white card (not a bare row), the right column emphasizes ONE hero project (large) plus a smaller secondary project, to strongly convey "which project am I driving today".
+
+Design system (Cool Fog Desk, exact):
+- Canvas #F3F5F7, panel #FFFFFF, soft #E8ECF1. Ink #0F172A. Muted #64748B. Hairlines rgba(15,23,42,0.09).
+- ONE accent teal #0F766E (+ soft rgba(15,118,110,0.12)). No purple, no gold, no gradient.
+- System sans. NO serif, NO italic.
+- Radius: cards 14px, controls 10px, pills 999px. Soft shadow on task cards and project cards.
+
+LEFT 60% — "今日任务":
+- Header: bold 28px "今日行动" left, a small pill toggle "全部 / 未完成" on the right.
+- 6 small white task cards in a 2-column grid (3 rows x 2). Each card (14px radius, 1px hairline):
+  - top row: status pill (待办/进行中/已完成) + a tiny priority dot (rose/amber/slate).
+  - bold task title (14px, up to 2 lines).
+  - bottom meta line muted 12px: "项目A · 今天到期 · 子任务 1/2 · 30分钟".
+- 2 overdue cards have a 2px rose left bar. The "进行中" cards have a 2px teal left bar.
+
+RIGHT 40% — "推进中的项目":
+- One HERO project card (big, soft shadow): 6px teal left bar, bold project name 18px, one-line description, a chunky progress bar (teal on #E8ECF1) with "进度 4/7 · 57%", a "本周投入 3h 20m" line, and a "今天 2 项待办" inline hint.
+- Below, a smaller secondary project card (sky #38BDF8 left bar), same structure, condensed.
+- Bottom: a slim 4-stat strip in one row (no boxes, hairline-separated): 本周完成 5 · 进行中 2 项目 · 完成率 71% · 投入 8h.
+
+No section numbers, no eyebrows, no emojis, no marketing decoration. Hierarchy from the hero card + accent left bars. Calm Linear/Things-grade tool.

@@ -2,8 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { ProjectColor, ProjectSummary } from '@/types/project';
+import type { ProjectColor, ProjectStatus, ProjectSummary } from '@/types/project';
 import { PROJECT_COLORS, PROJECT_STATUS_LABELS } from '@/types/project';
+import { useStore, mutate } from '@/lib/store/useStore';
+import { createProject as createProjectRepo, deleteProject as deleteProjectFn, listProjects } from '@/lib/store/repository';
+import { parseProjectInput } from '@/lib/project/validation';
 
 type Filter = 'active' | 'all' | 'completed' | 'archived';
 
@@ -14,6 +17,13 @@ const FILTERS: Array<{ key: Filter; label: string }> = [
   { key: 'archived', label: '已归档' },
 ];
 
+const STATUS_MAP: Record<Filter, ProjectStatus | 'all'> = {
+  active: 'active',
+  all: 'all',
+  completed: 'completed',
+  archived: 'archived',
+};
+
 function todayLocal() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -21,9 +31,8 @@ function todayLocal() {
 
 export function ProjectsWorkspace() {
   const router = useRouter();
+  const db = useStore();
   const [filter, setFilter] = useState<Filter>('active');
-  const [projects, setProjects] = useState<ProjectSummary[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -36,25 +45,10 @@ export function ProjectsWorkspace() {
   const [menuId, setMenuId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  async function load(nextFilter = filter) {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(`/api/projects?status=${nextFilter}`);
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || '加载项目失败');
-      setProjects(body.projects ?? []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '加载项目失败');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void load(filter);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter]);
+  const projects = useMemo(
+    () => listProjects(db, STATUS_MAP[filter]),
+    [db, filter],
+  );
 
   const emptyCopy = useMemo(() => {
     if (filter === 'active') {
@@ -71,32 +65,30 @@ export function ProjectsWorkspace() {
     };
   }, [filter]);
 
-  async function createProject(event: React.FormEvent) {
+  function createProject(event: React.FormEvent) {
     event.preventDefault();
     setFormError('');
     setSaving(true);
     try {
-      const res = await fetch('/api/projects', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          description,
-          color,
-          target_date: targetDate || null,
-          start_date: startDate || null,
-        }),
+      const input = parseProjectInput({
+        name,
+        description,
+        color,
+        target_date: targetDate || null,
+        start_date: startDate || null,
       });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || '创建失败');
+      let createdId = '';
+      mutate((draft) => {
+        const created = createProjectRepo(draft, input);
+        createdId = created.id;
+      });
       setDrawerOpen(false);
       setName('');
       setDescription('');
       setColor(PROJECT_COLORS[0]);
       setTargetDate('');
       setStartDate('');
-      router.push(`/projects/${body.project.id}`);
-      router.refresh();
+      router.push(`/projects/detail?id=${createdId}`);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : '创建失败');
     } finally {
@@ -104,18 +96,17 @@ export function ProjectsWorkspace() {
     }
   }
 
-  async function deleteProject(project: ProjectSummary) {
+  function deleteProject(project: ProjectSummary) {
     if (!window.confirm(`确定删除项目「${project.name}」吗？项目下的任务、子任务和耗时记录都会一起删除，且无法撤销。`)) {
       return;
     }
     setDeletingId(project.id);
     setMenuId(null);
     try {
-      const res = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || '删除失败');
-      await load(filter);
-      router.refresh();
+      mutate((draft) => {
+        deleteProjectFn(draft, project.id);
+      });
+      router.push('/projects');
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除失败');
     } finally {
@@ -161,13 +152,7 @@ export function ProjectsWorkspace() {
 
       {error ? <p className="form-error">{error}</p> : null}
 
-      {loading ? (
-        <div className="module-grid projects-grid">
-          <div className="life-card skeleton-card" />
-          <div className="life-card skeleton-card" />
-          <div className="life-card skeleton-card" />
-        </div>
-      ) : projects.length === 0 ? (
+      {projects.length === 0 ? (
         <article className="projects-empty">
           <span className="projects-empty-mark" aria-hidden />
           <h2>{emptyCopy.title}</h2>
@@ -188,11 +173,11 @@ export function ProjectsWorkspace() {
                 className="life-card project-card"
                 role="button"
                 tabIndex={0}
-                onClick={() => router.push(`/projects/${project.id}`)}
+                onClick={() => router.push(`/projects/detail?id=${project.id}`)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
-                    router.push(`/projects/${project.id}`);
+                    router.push(`/projects/detail?id=${project.id}`);
                   }
                 }}
               >

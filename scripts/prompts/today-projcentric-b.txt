@@ -1,0 +1,24 @@
+Design a flat UI layout comp (NOT a photo, NOT 3D, a static web app screenshot) for a personal project execution app's TODAY home screen, called "Clarity".
+
+CRITICAL: flat product UI screenshot, not a photo. Light theme only. No photographic / 3D / mockup textures.
+
+Layout: project-centric two-column desktop (1440x960) with a HORIZONTAL accent strip on top. Variant B: the task list leans on tight horizontal row rhythm; the right column groups projects into a vertical stack with a live "recent activity" mini-timeline at the bottom.
+
+Design system (Cool Fog Desk, exact):
+- Canvas #F3F5F7, panel #FFFFFF, soft #E8ECF1. Ink #0F172A. Muted #64748B. Hairlines rgba(15,23,42,0.09).
+- ONE accent teal #0F766E (+ soft rgba(15,118,110,0.12)). No purple, no gold, no gradient.
+- System sans. NO serif, NO italic.
+- Radius: cards 14px, controls 10px, pills 999px. Soft shadow only on project cards.
+
+TOP STRIP: a full-width thin white bar (64px) with left brand "Clarity" + a today date chip "周三 · 7月29" in a pill, and a small stat trio on the right "本周 5 完成 · 71% · 8h".
+
+LEFT 60% — "今日任务":
+- Bold 28px "今日行动", small muted date under it.
+- A single unified task list (no group boxes), grouped only by subtle muted section labels inline (已逾期 / 今天到期 / 未来高优 / 进行中), 8 task rows total, 1px hairline divider between rows.
+- Each row: teal/rose status pill + title + right meta (子任务, 耗时, due date). The "已逾期" rows have a hairline rose left-border (2px). "进行中" rows have a hairline teal left-border.
+
+RIGHT 40% — "进行中项目" + activity:
+- 2 white project cards (soft shadow, 14px), each: 4px left color bar, name bold, short muted desc, thin progress bar teal-on-#E8ECF1, "4/7" text, "本周 3h 20m".
+- Below the cards: a compact "最近活动" mini-timeline — 3 items, each a 8px teal dot + one line "完成了「设计登录页」· 2小时前" muted. Connected by a thin vertical hairline teal-tinted line.
+
+No section numbers, no eyebrows, no emojis. Linear-grade calm desk. Hierarchy from type and hairline, not from boxes.
