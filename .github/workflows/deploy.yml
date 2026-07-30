@@ -28,7 +28,7 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm install --no-audit --no-fund --omit=optional
+      - run: npm install --no-audit --no-fund
         env:
           # Skip the Electron binary download: this workflow only builds the static
           # web export, never the desktop app, so the Electron runtime isn't needed
