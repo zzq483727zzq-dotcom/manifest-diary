@@ -203,6 +203,35 @@ describe('task focus completion', () => {
     expect(db.dependencyBypasses).toEqual([]);
   });
 
+  it('drops bypasses with scalar or mixed dependency ids', () => {
+    const db = emptyDB();
+    importBackup(db, {
+      version: 1,
+      exported_at: '2026-07-31T00:00:00.000Z',
+      projects: [],
+      tasks: [],
+      subtasks: [],
+      timeEntries: [],
+      dependencyBypasses: [
+        {
+          id: 'bypass-scalar',
+          task_id: 'task-1',
+          dependency_ids: 'dep-1' as unknown as string[],
+          reason: '绕过原因',
+          created_at: '2026-07-31T00:00:00.000Z',
+        },
+        {
+          id: 'bypass-mixed',
+          task_id: 'task-1',
+          dependency_ids: ['dep-1', ''],
+          reason: '绕过原因',
+          created_at: '2026-07-31T00:00:00.000Z',
+        },
+      ],
+    });
+    expect(db.dependencyBypasses).toEqual([]);
+  });
+
   it('rejects invalid create fields at the repository boundary', () => {
     const db = emptyDB();
     const project = createProject(db, {

@@ -164,12 +164,13 @@ export function normalizeDependencyBypasses(value: unknown): DependencyBypass[] 
       const created_at = typeof item.created_at === 'string' ? item.created_at : '';
       const reason = normalizeBlockedReason(item.reason);
       const dependency_ids = Array.isArray(item.dependency_ids)
-        ? item.dependency_ids
-            .filter((dependencyId): dependencyId is string => typeof dependencyId === 'string')
-            .map((dependencyId) => dependencyId.trim())
-            .filter(Boolean)
-        : [];
-      if (!id || !task_id || !reason || !Number.isFinite(Date.parse(created_at))) return null;
+        ? item.dependency_ids.map((dependencyId) =>
+          typeof dependencyId === 'string' ? dependencyId.trim() : '')
+        : null;
+      if (!id || !task_id || !reason || !Number.isFinite(Date.parse(created_at)) ||
+        !dependency_ids || dependency_ids.length === 0 || dependency_ids.some((dependencyId) => !dependencyId)) {
+        return null;
+      }
       return { id, task_id, dependency_ids, reason, created_at };
     })
     .filter((item): item is DependencyBypass => item !== null);
