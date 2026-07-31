@@ -548,7 +548,6 @@ export function createTask(db: ClarityDB, input: TaskInput): TaskWithMeta {
   touchProject(db, input.project_id, at);
   return getTask(db, id)!;
 }
-
 export function updateTask(
   db: ClarityDB,
   id: string,
@@ -556,6 +555,17 @@ export function updateTask(
 ): TaskWithMeta {
   const existing = getTaskEntity(db, id);
   if (!existing) throw new Error('任务不存在');
+  if (patch.status !== undefined && !['todo', 'in_progress', 'completed'].includes(patch.status)) {
+    throw new Error('任务状态不支持');
+  }
+  if (patch.priority !== undefined && !['low', 'medium', 'high'].includes(patch.priority)) {
+    throw new Error('任务优先级不支持');
+  }
+  if (patch.project_id !== undefined && (typeof patch.project_id !== 'string' || !patch.project_id.trim())) {
+    throw new Error('项目不存在');
+  }
+  if (patch.title !== undefined && typeof patch.title !== 'string') throw new Error('任务标题格式不正确');
+  if (patch.description !== undefined && typeof patch.description !== 'string') throw new Error('任务描述格式不正确');
 
   const nextProjectId = patch.project_id ?? existing.project_id;
   const previousProjectId = existing.project_id;
@@ -577,11 +587,11 @@ export function updateTask(
   }
 
   if (patch.status === 'in_progress' && existing.status !== 'in_progress') {
-    startTaskFocus(db, id);
+    const staged = cloneDB(db);
+    updateTask(staged, id, { ...patch, status: existing.status });
+    startTaskFocus(staged, id);
+    Object.assign(db, staged);
     return getTask(db, id)!;
-  }
-  if (patch.status === 'todo' && existing.status === 'in_progress' && (existing.started_at || existing.elapsed_seconds > 0)) {
-    stopTimer(db, id, { note: '任务暂停' });
   }
   const execution = normalizeExecutionInput(patch, existing);
   const at = nowIso();
@@ -603,6 +613,9 @@ export function updateTask(
   });
   if (nextTask.is_blocked && (!nextTask.blocked_reason || !nextTask.blocked_at)) {
     throw new Error('阻塞原因不能为空');
+  }
+  if (patch.status === 'todo' && existing.status === 'in_progress' && (existing.started_at || existing.elapsed_seconds > 0)) {
+    stopTimer(db, id, { note: '任务暂停' });
   }
   // 旧状态先记下，用于：completed 保留 completed_at、以及"切到完成时自动停计时"。
   const prevStatus = existing.status;
@@ -1340,6 +1353,31 @@ export function exportBackup(db: ClarityDB): BackupPayload {
   };
 }
 
+function validReferenceRecord(value: unknown, idField: 'id' | 'task_id' | 'project_id'): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const item = value as Record<string, unknown>;
+  return typeof item[idField] === 'string' && item[idField].length > 0;
+}
+function validProjectRecord(project: unknown): project is Project {
+  if (!project || typeof project !== 'object') return false;
+  const item = project as Partial<Project>;
+  return typeof item.id === 'string' && item.id.length > 0 &&
+    typeof item.name === 'string' && typeof item.description === 'string' &&
+    typeof item.status === 'string' && ['active', 'completed', 'archived'].includes(item.status) &&
+    typeof item.created_at === 'string' && typeof item.updated_at === 'string';
+}
+
+function validTaskRecord(task: unknown): task is Task {
+  if (!task || typeof task !== 'object') return false;
+  const item = task as Partial<Task>;
+  return typeof item.id === 'string' && item.id.length > 0 &&
+    typeof item.project_id === 'string' && item.project_id.length > 0 &&
+    typeof item.title === 'string' && typeof item.description === 'string' &&
+    typeof item.status === 'string' && ['todo', 'in_progress', 'completed'].includes(item.status) &&
+    typeof item.priority === 'string' && ['low', 'medium', 'high'].includes(item.priority) &&
+    typeof item.created_at === 'string' && typeof item.updated_at === 'string';
+}
+
 function importBackupIntoDB(
   db: ClarityDB,
   payload: BackupPayload,
@@ -1363,6 +1401,7 @@ function importBackupIntoDB(
   let importedTimeEntries = 0;
   let importedProjectTimeEntries = 0;
   for (const project of payload.projects) {
+    if (!validProjectRecord(project)) continue;
     const existing = db.projects.find((item) => item.id === project.id);
     const record: Project = {
       id: project.id,
@@ -1391,6 +1430,7 @@ function importBackupIntoDB(
   }
 
   for (const task of payload.tasks ?? []) {
+    if (!validTaskRecord(task)) continue;
     if (!db.projects.some((project) => project.id === task.project_id)) continue;
     const existing = db.tasks.find((item) => item.id === task.id);
     const record: Task = {
@@ -1432,6 +1472,7 @@ function importBackupIntoDB(
   }
 
   for (const subtask of payload.subtasks ?? []) {
+    if (!validReferenceRecord(subtask, 'id') || !validReferenceRecord(subtask, 'task_id')) continue;
     if (!db.tasks.some((task) => task.id === subtask.task_id)) continue;
     const existing = db.subtasks.find((item) => item.id === subtask.id);
     const record: Subtask = {
@@ -1449,6 +1490,7 @@ function importBackupIntoDB(
   }
 
   for (const entry of payload.timeEntries ?? []) {
+    if (!validReferenceRecord(entry, 'id') || !validReferenceRecord(entry, 'task_id')) continue;
     if (!db.tasks.some((task) => task.id === entry.task_id)) continue;
     const existing = db.timeEntries.find((item) => item.id === entry.id);
     const record: TimeEntry = {
@@ -1466,6 +1508,7 @@ function importBackupIntoDB(
   }
 
   for (const entry of payload.projectTimeEntries ?? []) {
+    if (!validReferenceRecord(entry, 'id') || !validReferenceRecord(entry, 'project_id')) continue;
     if (!db.projects.some((project) => project.id === entry.project_id)) continue;
     const existing = db.projectTimeEntries.find((item) => item.id === entry.id);
     const record: ProjectTimeEntry = {

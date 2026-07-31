@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import type {
   ProjectSummary,
   Subtask,
-  Task,
   TaskPriority,
   TaskStatus,
   TaskWithMeta,
@@ -21,6 +20,7 @@ import { CountdownTimer } from '@/components/project/CountdownTimer';
 import { ProjectCountdown } from '@/components/project/ProjectCountdown';
 import { useCountdown } from '@/hooks/useCountdown';
 import { useStore, mutate } from '@/lib/store/useStore';
+import { notifyFocusCompletion } from '@/lib/project/focus-notification';
 import {
   createSubtask,
   createTask,
@@ -74,7 +74,7 @@ export function ProjectBoard({
   initialTaskId,
 }: {
   project: ProjectSummary;
-  initialTasks: TaskWithMeta[];
+  initialTasks?: TaskWithMeta[];
   initialTaskId?: string;
 }) {
   const router = useRouter();
@@ -84,11 +84,7 @@ export function ProjectBoard({
     [db, project],
   );
   const [view, setView] = useState<'board' | 'list'>('board');
-  const [hydrated, setHydrated] = useState(false);
-  const tasks = useMemo(() => {
-    const live = listTasks(db, project.id);
-    return hydrated ? live : (live.length ? live : initialTasks);
-  }, [db, project.id, initialTasks, hydrated]);
+  const tasks = useMemo(() => listTasks(db, project.id), [db, project.id]);
   const [listFilter, setListFilter] = useState<'all' | 'open' | 'completed'>('all');
   const [createOpen, setCreateOpen] = useState(false);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(initialTaskId ?? null);
@@ -101,9 +97,6 @@ export function ProjectBoard({
   const [expandedCompleted, setExpandedCompleted] = useState(false);
   const [deletingProject, setDeletingProject] = useState(false);
 
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
   useEffect(() => {
     const stored = window.localStorage.getItem('clarity-project-view');
     if (stored === 'board' || stored === 'list') setView(stored);
@@ -628,7 +621,11 @@ function TaskDrawer({
         : window.prompt(`任务当前被阻塞：${blockers.labels.join('；')}\n请输入绕过原因`)?.trim();
       if (!blockers.ready && !reason) return;
       try {
-        mutate((draft) => startTaskFocus(draft, task.id, reason ? { bypass: true, reason } : undefined));
+        const formPatch = parseTaskInput({ title, description, priority, due_date: dueDate || null, start_date: startDate || null, status: task.status, project_id: projectId }, true);
+        mutate((draft) => {
+          updateTask(draft, taskId, { ...formPatch, status: task.status });
+          startTaskFocus(draft, taskId, reason ? { bypass: true, reason } : undefined);
+        });
         setDirty(false);
       } catch { /* silent */ }
       return;
@@ -638,7 +635,8 @@ function TaskDrawer({
     }
     setStatus(next);
     try {
-      mutate((draft) => { updateTask(draft, taskId, { status: next }); });
+      const formPatch = parseTaskInput({ title, description, priority, due_date: dueDate || null, start_date: startDate || null, status: task.status, project_id: projectId }, true);
+      mutate((draft) => { updateTask(draft, taskId, { ...formPatch, status: next }); });
       setDirty(false);
     } catch {
       // silent
@@ -943,6 +941,7 @@ function CardCountdownChip({
   useEffect(() => {
     if (!task.started_at || remaining > 0 || finishedRef.current) return;
     finishedRef.current = true;
+    notifyFocusCompletion();
     mutate((draft) => {
       finishTaskFocus(draft, task.id);
     });
