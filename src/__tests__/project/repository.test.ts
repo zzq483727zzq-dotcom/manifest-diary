@@ -17,6 +17,7 @@ import {
   recordDependencyBypass,
   removeTaskDependency,
   setTaskBlocked,
+  startTaskFocus,
   updateTask,
   weekMinutes,
 } from '@/lib/store/repository';
@@ -77,6 +78,19 @@ describe('task dependency repository', () => {
     expect(taskA.project_id).toBe(originalProjectId);
   });
 
+  it('touches both project timestamps after a successful task move', () => {
+    const { db, taskC, otherTask } = dependencyFixture();
+    const oldProject = db.projects.find((project) => project.id === taskC.project_id)!;
+    const newProject = db.projects.find((project) => project.id === otherTask.project_id)!;
+    oldProject.updated_at = '2020-01-01T00:00:00.000Z';
+    newProject.updated_at = '2020-01-01T00:00:00.000Z';
+
+    updateTask(db, taskC.id, { project_id: newProject.id });
+
+    expect(taskC.project_id).toBe(newProject.id);
+    expect(oldProject.updated_at).not.toBe('2020-01-01T00:00:00.000Z');
+    expect(newProject.updated_at).not.toBe('2020-01-01T00:00:00.000Z');
+  });
   it('supports all and any dependency readiness without mutating the database', () => {
     const { db, taskA, taskB, taskC } = dependencyFixture();
     const first = addTaskDependency(db, taskC.id, taskA.id);
@@ -102,6 +116,17 @@ describe('task dependency repository', () => {
     expect(canTaskStart(db, taskC.id).ready).toBe(false);
   });
 
+  it('blocks ordinary focus starts and records explicit bypasses', () => {
+    const { db, taskA, taskC } = dependencyFixture();
+    addTaskDependency(db, taskC.id, taskA.id);
+    expect(() => startTaskFocus(db, taskC.id)).toThrow('任务当前被阻塞');
+    expect(taskC.started_at).toBeNull();
+
+    startTaskFocus(db, taskC.id, { bypass: true, reason: '先处理可独立部分' });
+    expect(taskC.status).toBe('in_progress');
+    expect(taskC.started_at).not.toBeNull();
+    expect(db.dependencyBypasses).toHaveLength(1);
+  });
   it('records and clears external blocking while preserving bypass history', () => {
     const { db, taskA, taskC } = dependencyFixture();
     const dependency = addTaskDependency(db, taskC.id, taskA.id);
@@ -125,6 +150,7 @@ describe('task dependency repository', () => {
     expect(getTaskBlockers(db, taskC.id).externalReason).toBeNull();
     expect(listDependencyBypasses(db, taskC.id)).toHaveLength(1);
   });
+
 });
 
 describe('task focus completion', () => {
@@ -228,6 +254,27 @@ describe('task focus completion', () => {
         created_at: '2026-07-31T00:00:00.000Z',
         updated_at: '2026-07-31T00:00:00.000Z',
         completed_at: null,
+      }, {
+        id: 'task-2',
+        project_id: 'project-1',
+        title: '前置任务',
+        description: '',
+        status: 'todo',
+        priority: 'medium',
+        due_date: null,
+        start_date: null,
+        position: 1,
+        target_minutes: 25,
+        estimate_minutes: 25,
+        dependency_mode: 'all',
+        is_blocked: false,
+        blocked_reason: null,
+        blocked_at: null,
+        started_at: null,
+        elapsed_seconds: 0,
+        created_at: '2026-07-31T00:00:00.000Z',
+        updated_at: '2026-07-31T00:00:00.000Z',
+        completed_at: null,
       }],
       subtasks: [],
       timeEntries: [],
@@ -254,6 +301,9 @@ describe('task focus completion', () => {
       blocked_at: null,
     });
     expect(db.taskDependencies).toHaveLength(1);
+    expect(db.taskDependencies[0]).toMatchObject({
+      task_id: 'task-1', depends_on_task_id: 'task-2',
+    });
     expect(db.dependencyBypasses).toEqual([]);
   });
 
@@ -349,6 +399,53 @@ describe('task focus completion', () => {
     expect(db.dependencyBypasses).toEqual([]);
   });
 
+  it('drops invalid imported dependency graph rows and bypass references', () => {
+    const db = emptyDB();
+    const project = createProject(db, {
+      name: '项目', description: '', color: '#5EEAD4', target_date: null, start_date: null,
+    });
+    const otherProject = createProject(db, {
+      name: '其他', description: '', color: '#7DD3FC', target_date: null, start_date: null,
+    });
+    const taskA = createTask(db, {
+      project_id: project.id, title: '一', description: '', status: 'todo', priority: 'medium',
+      due_date: null, start_date: null,
+    });
+    const taskB = createTask(db, {
+      project_id: project.id, title: '二', description: '', status: 'todo', priority: 'medium',
+      due_date: null, start_date: null,
+    });
+    const otherTask = createTask(db, {
+      project_id: otherProject.id, title: '跨项目', description: '', status: 'todo', priority: 'medium',
+      due_date: null, start_date: null,
+    });
+    importBackup(db, {
+      version: 1, exported_at: '2026-07-31T00:00:00.000Z', projects: [], tasks: [], subtasks: [], timeEntries: [],
+      taskDependencies: [
+        { id: 'dep-valid', task_id: taskA.id, depends_on_task_id: taskB.id, created_at: '2026-07-31T00:00:00.000Z' },
+        { id: 'dep-duplicate', task_id: taskA.id, depends_on_task_id: taskB.id, created_at: '2026-07-31T00:00:00.000Z' },
+        { id: 'dep-cross', task_id: taskA.id, depends_on_task_id: otherTask.id, created_at: '2026-07-31T00:00:00.000Z' },
+        { id: 'dep-self', task_id: taskA.id, depends_on_task_id: taskA.id, created_at: '2026-07-31T00:00:00.000Z' },
+        { id: 'dep-cycle', task_id: taskB.id, depends_on_task_id: taskA.id, created_at: '2026-07-31T00:00:00.000Z' },
+      ],
+      dependencyBypasses: [
+        { id: 'bypass-valid', task_id: taskA.id, dependency_ids: ['dep-valid'], reason: '原因', created_at: '2026-07-31T00:00:00.000Z' },
+        { id: 'bypass-unknown', task_id: taskA.id, dependency_ids: ['missing'], reason: '原因', created_at: '2026-07-31T00:00:00.000Z' },
+      ],
+    });
+    expect(db.taskDependencies.map((item) => item.id)).toEqual(['dep-valid']);
+    expect(db.dependencyBypasses.map((item) => item.id)).toEqual(['bypass-valid']);
+
+    getTaskEntity(db, taskB.id)!.status = 'completed';
+    importBackup(db, {
+      version: 1, exported_at: '2026-07-31T00:00:00.000Z', projects: [], tasks: [], subtasks: [], timeEntries: [],
+      dependencyBypasses: [{
+        id: 'bypass-completed', task_id: taskA.id, dependency_ids: ['dep-valid'], reason: '已完成',
+        created_at: '2026-07-31T00:00:00.000Z',
+      }],
+    });
+    expect(db.dependencyBypasses.map((item) => item.id)).toEqual(['bypass-valid']);
+  });
   it('cleans dependency edges and bypasses when deleting a task', () => {
     const db = emptyDB();
     db.taskDependencies.push(
@@ -375,25 +472,44 @@ describe('task focus completion', () => {
 
   it('exports dependency tables and reports import counts', () => {
     const source = emptyDB();
+    const project = createProject(source, {
+      name: '项目', description: '', color: '#5EEAD4', target_date: null, start_date: null,
+    });
+    createTask(source, {
+      project_id: project.id, title: '任务一', description: '', status: 'todo', priority: 'medium',
+      due_date: null, start_date: null,
+    }).id;
+    createTask(source, {
+      project_id: project.id, title: '任务二', description: '', status: 'todo', priority: 'medium',
+      due_date: null, start_date: null,
+    }).id;
+    const sourceTasks = source.tasks;
     source.taskDependencies.push({
-      id: 'dep-1', task_id: 'task-1', depends_on_task_id: 'task-2',
+      id: 'dep-1', task_id: sourceTasks[0].id, depends_on_task_id: sourceTasks[1].id,
       created_at: '2026-07-31T00:00:00.000Z',
     });
     source.dependencyBypasses.push({
-      id: 'bypass-1', task_id: 'task-1', dependency_ids: ['dep-1'], reason: '原因',
+      id: 'bypass-1', task_id: sourceTasks[0].id, dependency_ids: ['dep-1'], reason: '原因',
       created_at: '2026-07-31T00:00:00.000Z',
     });
     const backup = exportBackup(source);
     expect(backup.taskDependencies).toHaveLength(1);
     expect(backup.dependencyBypasses).toHaveLength(1);
     const target = emptyDB();
-    const counts = importBackup(target, backup);
-    expect(counts.taskDependencies).toBe(1);
-    expect(counts.dependencyBypasses).toBe(1);
+    importBackup(target, exportBackup(source));
+    expect(target.taskDependencies).toHaveLength(1);
+    expect(target.dependencyBypasses).toHaveLength(1);
   });
 
   it('accepts empty dependency ids for external-only bypasses', () => {
     const db = emptyDB();
+    const project = createProject(db, {
+      name: '项目', description: '', color: '#5EEAD4', target_date: null, start_date: null,
+    });
+    const task = createTask(db, {
+      project_id: project.id, title: '任务', description: '', status: 'todo', priority: 'medium',
+      due_date: null, start_date: null,
+    });
     importBackup(db, {
       version: 1,
       exported_at: '2026-07-31T00:00:00.000Z',
@@ -402,7 +518,7 @@ describe('task focus completion', () => {
       subtasks: [],
       timeEntries: [],
       dependencyBypasses: [{
-        id: 'bypass-external', task_id: 'task-1', dependency_ids: [], reason: '外部阻塞',
+        id: 'bypass-external', task_id: task.id, dependency_ids: [], reason: '外部阻塞',
         created_at: '2026-07-31T00:00:00.000Z',
       }],
     });

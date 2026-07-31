@@ -151,12 +151,20 @@ function validateReason(reason: string, message: string): string {
 // Dependency edges point from the blocked task to its prerequisites. A path
 // from the proposed prerequisite back to the blocked task would create a cycle.
 function reachesTask(db: ClarityDB, startTaskId: string, targetTaskId: string): boolean {
+  return reachesTaskInEdges(db.taskDependencies, startTaskId, targetTaskId);
+}
+
+function reachesTaskInEdges(
+  edges: TaskDependency[],
+  startTaskId: string,
+  targetTaskId: string,
+): boolean {
   const visited = new Set<string>();
   const visit = (taskId: string): boolean => {
     if (taskId === targetTaskId) return true;
     if (visited.has(taskId)) return false;
     visited.add(taskId);
-    return db.taskDependencies
+    return edges
       .filter((dependency) => dependency.task_id === taskId)
       .some((dependency) => visit(dependency.depends_on_task_id));
   };
@@ -549,6 +557,7 @@ export function updateTask(
   if (!existing) throw new Error('任务不存在');
 
   const nextProjectId = patch.project_id ?? existing.project_id;
+  const previousProjectId = existing.project_id;
   const nextProject = getProject(db, nextProjectId);
   if (!nextProject) throw new Error('项目不存在');
   if (nextProject.status === 'archived') throw new Error('不能移动到已归档项目');
@@ -623,8 +632,8 @@ export function updateTask(
   }
   existing.project_id = nextProjectId;
 
-  touchProject(db, existing.project_id, at);
-  if (nextProjectId !== existing.project_id) touchProject(db, nextProjectId, at);
+  touchProject(db, nextProjectId, at);
+  if (previousProjectId !== nextProjectId) touchProject(db, previousProjectId, at);
   return getTask(db, id)!;
 }
 
@@ -851,6 +860,28 @@ export function taskRemainingSeconds(task: Task, now: number = Date.now()): numb
   const elapsed = taskElapsedSeconds(task, now);
   const total = Math.max(0, task.target_minutes || 0) * 60;
   return Math.max(0, total - elapsed);
+}
+
+/** Start a task only after dependency/external blocker checks. */
+export function startTaskFocus(
+  db: ClarityDB,
+  taskId: string,
+  options: { bypass?: boolean; reason?: string } = {},
+): void {
+  const task = getTaskForDependency(db, taskId);
+  if (task.status === 'completed') return;
+  if (task.started_at) return;
+  const blockers = canTaskStart(db, taskId);
+  if (!blockers.ready) {
+    if (!options.bypass) throw new Error('任务当前被阻塞');
+    const reason = validateReason(options.reason ?? '', '绕过原因不能为空');
+    recordDependencyBypass(db, taskId, blockers.unfinishedDependencyIds
+      .map((dependencyTaskId) => db.taskDependencies.find(
+        (dependency) => dependency.task_id === taskId && dependency.depends_on_task_id === dependencyTaskId,
+      )?.id)
+      .filter((dependencyId): dependencyId is string => dependencyId !== undefined), reason);
+  }
+  startTimer(db, taskId);
 }
 
 /** 开始终倒计时。若已在跑则不改（避免重复起算）。 */
@@ -1233,6 +1264,54 @@ export function listTasksByDueRange(
 // Backup export / import (acts on the in-memory DB, not localStorage)
 // ---------------------------------------------------------------------------
 
+function validImportedDependencies(
+  db: ClarityDB,
+  dependencies: TaskDependency[],
+): TaskDependency[] {
+  const accepted: TaskDependency[] = [];
+  const taskById = new Map(db.tasks.map((task) => [task.id, task]));
+  for (const dependency of dependencies) {
+    const task = taskById.get(dependency.task_id);
+    const prerequisite = taskById.get(dependency.depends_on_task_id);
+    if (!task || !prerequisite || task.id === prerequisite.id || task.project_id !== prerequisite.project_id) continue;
+    const duplicate = [...db.taskDependencies, ...accepted].some((existing) =>
+      existing.id !== dependency.id &&
+      existing.task_id === dependency.task_id &&
+      existing.depends_on_task_id === dependency.depends_on_task_id,
+    );
+    if (duplicate) continue;
+    const prior = db.taskDependencies.findIndex((existing) => existing.id === dependency.id);
+    const edges = [...db.taskDependencies, ...accepted]
+      .filter((existing) => existing.id !== dependency.id);
+    if (reachesTaskInEdges(edges, dependency.depends_on_task_id, dependency.task_id)) continue;
+    if (prior >= 0) {
+      const replaced = db.taskDependencies[prior];
+      if (replaced.task_id !== dependency.task_id || replaced.depends_on_task_id !== dependency.depends_on_task_id) {
+        // The replacement is validated against the existing graph above.
+      }
+    }
+    accepted.push(dependency);
+  }
+  return accepted;
+}
+
+function validImportedBypasses(
+  db: ClarityDB,
+  bypasses: DependencyBypass[],
+  acceptedDependencies: TaskDependency[],
+): DependencyBypass[] {
+  const dependencies = [...db.taskDependencies, ...acceptedDependencies];
+  return bypasses.filter((bypass) => {
+    const task = db.tasks.find((item) => item.id === bypass.task_id);
+    if (!task) return false;
+    return bypass.dependency_ids.every((dependencyId) => {
+      const dependency = dependencies.find((item) => item.id === dependencyId);
+      const prerequisite = dependency && db.tasks.find((item) => item.id === dependency.depends_on_task_id);
+      return dependency?.task_id === bypass.task_id && prerequisite?.status !== 'completed';
+    });
+  });
+}
+
 export function exportBackup(db: ClarityDB): BackupPayload {
   const byCreated = <T extends { created_at: string }>(items: T[]) =>
     items.slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -1377,7 +1456,12 @@ export function importBackup(
     else db.projectTimeEntries.push(record);
   }
 
-  for (const dependency of normalizeTaskDependencies(payload.taskDependencies)) {
+  const importedDependencies = normalizeTaskDependencies(payload.taskDependencies);
+  const importedBypasses = normalizeDependencyBypasses(payload.dependencyBypasses);
+  const acceptedDependencies = validImportedDependencies(db, importedDependencies);
+  const acceptedBypasses = validImportedBypasses(db, importedBypasses, acceptedDependencies);
+
+  for (const dependency of acceptedDependencies) {
     const existing = db.taskDependencies.find((item) => item.id === dependency.id);
     const record: TaskDependency = {
       id: dependency.id,
@@ -1389,7 +1473,7 @@ export function importBackup(
     else db.taskDependencies.push(record);
   }
 
-  for (const bypass of normalizeDependencyBypasses(payload.dependencyBypasses)) {
+  for (const bypass of acceptedBypasses) {
     const existing = db.dependencyBypasses.find((item) => item.id === bypass.id);
     const record: DependencyBypass = {
       id: bypass.id,
@@ -1408,8 +1492,8 @@ export function importBackup(
     subtasks: (payload.subtasks ?? []).length,
     timeEntries: (payload.timeEntries ?? []).length,
     projectTimeEntries: (payload.projectTimeEntries ?? []).length,
-    taskDependencies: normalizeTaskDependencies(payload.taskDependencies).length,
-    dependencyBypasses: normalizeDependencyBypasses(payload.dependencyBypasses).length,
+    taskDependencies: acceptedDependencies.length,
+    dependencyBypasses: acceptedBypasses.length,
   };
 }
 

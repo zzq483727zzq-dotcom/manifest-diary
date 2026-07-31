@@ -28,13 +28,14 @@ import {
   deleteSubtask,
   deleteTask,
   finishTimer,
+  getTaskBlockers,
   getTask,
   getProjectSummary,
   listSubtasks,
   listTasks,
   moveSubtask,
   pauseTimer,
-  startTimer,
+  startTaskFocus,
   taskRemainingSeconds,
   updateSubtask,
   updateTask,
@@ -190,9 +191,18 @@ export function ProjectBoard({
 
   function toggleTaskTimer(task: TaskWithMeta) {
     if (task.status === 'completed') return;
+    if (task.started_at) {
+      mutate((draft) => pauseTimer(draft, task.id));
+      return;
+    }
+    const blockers = getTaskBlockers(db, task.id);
+    const bypass = !blockers.ready;
+    const reason = bypass
+      ? window.prompt(`任务当前被阻塞：${blockers.labels.join('；')}\n请输入绕过原因`)?.trim()
+      : undefined;
+    if (bypass && !reason) return;
     mutate((draft) => {
-      if (task.started_at) pauseTimer(draft, task.id);
-      else startTimer(draft, task.id);
+      startTaskFocus(draft, task.id, bypass ? { bypass: true, reason } : undefined);
     });
   }
 
