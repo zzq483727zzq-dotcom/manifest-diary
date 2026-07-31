@@ -3,6 +3,7 @@ import { emptyDB } from '@/lib/store/store';
 import {
   createProject,
   createTask,
+  deleteProject,
   deleteTask,
   exportBackup,
   getTaskEntity,
@@ -274,6 +275,59 @@ describe('task focus completion', () => {
     const counts = importBackup(target, backup);
     expect(counts.taskDependencies).toBe(1);
     expect(counts.dependencyBypasses).toBe(1);
+  });
+
+  it('accepts empty dependency ids for external-only bypasses', () => {
+    const db = emptyDB();
+    importBackup(db, {
+      version: 1,
+      exported_at: '2026-07-31T00:00:00.000Z',
+      projects: [],
+      tasks: [],
+      subtasks: [],
+      timeEntries: [],
+      dependencyBypasses: [{
+        id: 'bypass-external', task_id: 'task-1', dependency_ids: [], reason: '外部阻塞',
+        created_at: '2026-07-31T00:00:00.000Z',
+      }],
+    });
+    expect(db.dependencyBypasses).toHaveLength(1);
+    expect(db.dependencyBypasses[0].dependency_ids).toEqual([]);
+  });
+
+  it('cleans all project dependency records when deleting a project', () => {
+    const db = emptyDB();
+    db.tasks.push(
+      { id: 'task-project', project_id: 'project-delete', title: '项目任务', description: '', status: 'todo', priority: 'medium', due_date: null, start_date: null, position: 0, target_minutes: 25, estimate_minutes: 25, dependency_mode: 'all', is_blocked: false, blocked_reason: null, blocked_at: null, started_at: null, elapsed_seconds: 0, created_at: '2026-07-31T00:00:00.000Z', updated_at: '2026-07-31T00:00:00.000Z', completed_at: null },
+      { id: 'task-other', project_id: 'project-keep', title: '其他任务', description: '', status: 'todo', priority: 'medium', due_date: null, start_date: null, position: 0, target_minutes: 25, estimate_minutes: 25, dependency_mode: 'all', is_blocked: false, blocked_reason: null, blocked_at: null, started_at: null, elapsed_seconds: 0, created_at: '2026-07-31T00:00:00.000Z', updated_at: '2026-07-31T00:00:00.000Z', completed_at: null },
+    );
+    db.projects.push(
+      { id: 'project-delete', name: '删除', description: '', color: '#5EEAD4', target_date: null, start_date: null, status: 'active', created_at: '2026-07-31T00:00:00.000Z', updated_at: '2026-07-31T00:00:00.000Z', completed_at: null, target_minutes: 25, started_at: null, elapsed_seconds: 0 },
+      { id: 'project-keep', name: '保留', description: '', color: '#7DD3FC', target_date: null, start_date: null, status: 'active', created_at: '2026-07-31T00:00:00.000Z', updated_at: '2026-07-31T00:00:00.000Z', completed_at: null, target_minutes: 25, started_at: null, elapsed_seconds: 0 },
+    );
+    db.taskDependencies.push(
+      { id: 'dep-delete', task_id: 'task-project', depends_on_task_id: 'task-other', created_at: '2026-07-31T00:00:00.000Z' },
+      { id: 'dep-keep', task_id: 'task-other', depends_on_task_id: 'task-other', created_at: '2026-07-31T00:00:00.000Z' },
+    );
+    db.dependencyBypasses.push(
+      { id: 'bypass-delete', task_id: 'task-project', dependency_ids: [], reason: '外部', created_at: '2026-07-31T00:00:00.000Z' },
+      { id: 'bypass-reference', task_id: 'task-other', dependency_ids: ['dep-delete'], reason: '绕过', created_at: '2026-07-31T00:00:00.000Z' },
+    );
+    deleteProject(db, 'project-delete');
+    expect(db.taskDependencies.map((item) => item.id)).toEqual(['dep-keep']);
+    expect(db.dependencyBypasses).toEqual([]);
+  });
+
+  it('prunes bypass references to deleted dependency edges', () => {
+    const db = emptyDB();
+    db.tasks.push(
+      { id: 'task-delete', project_id: 'project-1', title: '删除', description: '', status: 'todo', priority: 'medium', due_date: null, start_date: null, position: 0, target_minutes: 25, estimate_minutes: 25, dependency_mode: 'all', is_blocked: false, blocked_reason: null, blocked_at: null, started_at: null, elapsed_seconds: 0, created_at: '2026-07-31T00:00:00.000Z', updated_at: '2026-07-31T00:00:00.000Z', completed_at: null },
+      { id: 'task-owner', project_id: 'project-1', title: '保留', description: '', status: 'todo', priority: 'medium', due_date: null, start_date: null, position: 0, target_minutes: 25, estimate_minutes: 25, dependency_mode: 'all', is_blocked: false, blocked_reason: null, blocked_at: null, started_at: null, elapsed_seconds: 0, created_at: '2026-07-31T00:00:00.000Z', updated_at: '2026-07-31T00:00:00.000Z', completed_at: null },
+    );
+    db.taskDependencies.push({ id: 'dep-delete', task_id: 'task-owner', depends_on_task_id: 'task-delete', created_at: '2026-07-31T00:00:00.000Z' });
+    db.dependencyBypasses.push({ id: 'bypass-owner', task_id: 'task-owner', dependency_ids: ['dep-delete'], reason: '绕过', created_at: '2026-07-31T00:00:00.000Z' });
+    deleteTask(db, 'task-delete');
+    expect(db.dependencyBypasses).toEqual([]);
   });
 
   it('rejects invalid create fields at the repository boundary', () => {

@@ -266,6 +266,13 @@ export function deleteProject(db: ClarityDB, id: string) {
     (entry) => !taskIds.includes(entry.task_id),
   );
   db.subtasks = db.subtasks.filter((sub) => !taskIds.includes(sub.task_id));
+  db.taskDependencies = db.taskDependencies.filter(
+    (dependency) => !taskIds.includes(dependency.task_id) && !taskIds.includes(dependency.depends_on_task_id),
+  );
+  db.dependencyBypasses = db.dependencyBypasses.filter(
+    (bypass) => !taskIds.includes(bypass.task_id) &&
+      bypass.dependency_ids.every((dependencyId) => db.taskDependencies.some((dependency) => dependency.id === dependencyId)),
+  );
   db.tasks = db.tasks.filter((task) => task.project_id !== id);
   db.projectTimeEntries = db.projectTimeEntries.filter(
     (entry) => entry.project_id !== id,
@@ -424,7 +431,10 @@ export function deleteTask(db: ClarityDB, id: string) {
   db.taskDependencies = db.taskDependencies.filter(
     (dependency) => dependency.task_id !== id && dependency.depends_on_task_id !== id,
   );
-  db.dependencyBypasses = db.dependencyBypasses.filter((bypass) => bypass.task_id !== id);
+  db.dependencyBypasses = db.dependencyBypasses.filter((bypass) =>
+    bypass.task_id !== id &&
+    bypass.dependency_ids.every((dependencyId) => db.taskDependencies.some((dependency) => dependency.id === dependencyId)),
+  );
   db.tasks = db.tasks.filter((task) => task.id !== id);
   touchProject(db, existing.project_id, at);
 }

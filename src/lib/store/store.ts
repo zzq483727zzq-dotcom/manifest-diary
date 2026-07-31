@@ -168,7 +168,7 @@ export function normalizeDependencyBypasses(value: unknown): DependencyBypass[] 
           typeof dependencyId === 'string' ? dependencyId.trim() : '')
         : null;
       if (!id || !task_id || !reason || !Number.isFinite(Date.parse(created_at)) ||
-        !dependency_ids || dependency_ids.length === 0 || dependency_ids.some((dependencyId) => !dependencyId)) {
+        !dependency_ids || dependency_ids.some((dependencyId) => !dependencyId)) {
         return null;
       }
       return { id, task_id, dependency_ids, reason, created_at };
