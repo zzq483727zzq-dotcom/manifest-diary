@@ -64,6 +64,19 @@ describe('task dependency repository', () => {
     expect(() => removeTaskDependency(db, dependency.id)).toThrow('依赖不存在');
   });
 
+  it('rejects moving a dependency-bearing task across projects', () => {
+    const { db, taskA, taskB, otherTask } = dependencyFixture();
+    const dependency = addTaskDependency(db, taskB.id, taskA.id);
+    const originalProjectId = taskB.project_id;
+
+    expect(() => updateTask(db, taskB.id, { project_id: otherTask.project_id })).toThrow('移动任务会破坏同项目依赖');
+    expect(taskB.project_id).toBe(originalProjectId);
+    expect(listTaskDependencies(db, taskB.id)).toEqual([dependency]);
+
+    expect(() => updateTask(db, taskA.id, { project_id: otherTask.project_id })).toThrow('移动任务会破坏同项目依赖');
+    expect(taskA.project_id).toBe(originalProjectId);
+  });
+
   it('supports all and any dependency readiness without mutating the database', () => {
     const { db, taskA, taskB, taskC } = dependencyFixture();
     const first = addTaskDependency(db, taskC.id, taskA.id);
@@ -102,6 +115,10 @@ describe('task dependency repository', () => {
     const bypass = recordDependencyBypass(db, taskC.id, [dependency.id], '先处理可独立部分');
     expect(listDependencyBypasses(db, taskC.id)).toEqual([bypass]);
     expect(bypass.dependency_ids).toEqual([dependency.id]);
+    taskA.status = 'completed';
+    expect(() => recordDependencyBypass(db, taskC.id, [dependency.id], '前置任务已完成')).toThrow('只能绕过未完成依赖');
+    expect(() => recordDependencyBypass(db, taskC.id, ['unknown-dependency'], '未知依赖')).toThrow('依赖记录不属于当前任务');
+    expect(() => recordDependencyBypass(db, taskC.id, [dependency.id, 'unknown-dependency'], '混合依赖')).toThrow('依赖记录不属于当前任务');
     expect(() => recordDependencyBypass(db, taskC.id, [dependency.id], '   ')).toThrow('绕过原因不能为空');
 
     clearTaskBlocked(db, taskC.id);

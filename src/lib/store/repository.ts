@@ -290,9 +290,15 @@ export function recordDependencyBypass(
   }
   if (uniqueIds.some((dependencyId) => {
     const dependency = db.taskDependencies.find((item) => item.id === dependencyId);
-    return !dependency || dependency.task_id !== taskId;
+    if (!dependency || dependency.task_id !== taskId) return true;
+    const prerequisite = db.tasks.find((item) => item.id === dependency.depends_on_task_id);
+    return prerequisite?.status === 'completed';
   })) {
-    throw new Error('依赖记录不属于当前任务');
+    const hasUnknownDependency = uniqueIds.some((dependencyId) => {
+      const dependency = db.taskDependencies.find((item) => item.id === dependencyId);
+      return !dependency || dependency.task_id !== taskId;
+    });
+    throw new Error(hasUnknownDependency ? '依赖记录不属于当前任务' : '只能绕过未完成依赖');
   }
 
   const at = nowIso();
@@ -546,6 +552,19 @@ export function updateTask(
   const nextProject = getProject(db, nextProjectId);
   if (!nextProject) throw new Error('项目不存在');
   if (nextProject.status === 'archived') throw new Error('不能移动到已归档项目');
+
+  if (nextProjectId !== existing.project_id) {
+    const breaksDependencyInvariant = db.taskDependencies.some((dependency) => {
+      const taskProjectId = dependency.task_id === id
+        ? nextProjectId
+        : getTaskEntity(db, dependency.task_id)?.project_id;
+      const prerequisiteProjectId = dependency.depends_on_task_id === id
+        ? nextProjectId
+        : getTaskEntity(db, dependency.depends_on_task_id)?.project_id;
+      return taskProjectId !== prerequisiteProjectId;
+    });
+    if (breaksDependencyInvariant) throw new Error('移动任务会破坏同项目依赖');
+  }
 
   const execution = normalizeExecutionInput(patch, existing);
   const at = nowIso();
