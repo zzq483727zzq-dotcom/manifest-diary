@@ -1,6 +1,7 @@
 export type ProjectStatus = 'active' | 'completed' | 'archived';
 export type TaskStatus = 'todo' | 'in_progress' | 'completed';
 export type TaskPriority = 'low' | 'medium' | 'high';
+export type DependencyMode = 'all' | 'any';
 
 export const PROJECT_COLORS = [
   '#5EEAD4',
@@ -45,11 +46,31 @@ export interface Task {
   // started_at = 本次运行起算时刻（运行中 ISO 字符串，暂停为 null）；
   // elapsed_seconds = 之前累计已专注秒数（暂停保留，运行中=acc+(now-started_at)）
   target_minutes: number;
+  estimate_minutes: number;
+  dependency_mode: DependencyMode;
+  is_blocked: boolean;
+  blocked_reason: string | null;
+  blocked_at: string | null;
   started_at: string | null;
   elapsed_seconds: number;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+}
+
+export interface TaskDependency {
+  id: string;
+  task_id: string;
+  depends_on_task_id: string;
+  created_at: string;
+}
+
+export interface DependencyBypass {
+  id: string;
+  task_id: string;
+  dependency_ids: string[];
+  reason: string;
+  created_at: string;
 }
 
 export interface Subtask {
@@ -145,4 +166,6 @@ export interface BackupPayload {
   subtasks: Subtask[];
   timeEntries: TimeEntry[];
   projectTimeEntries?: ProjectTimeEntry[];
+  taskDependencies?: TaskDependency[];
+  dependencyBypasses?: DependencyBypass[];
 }

@@ -3,6 +3,8 @@ import type {
   ProjectTimeEntry,
   Subtask,
   Task,
+  TaskDependency,
+  DependencyBypass,
   TimeEntry,
 } from '@/types/project';
 
@@ -19,6 +21,8 @@ export interface ClarityDB {
   subtasks: Subtask[];
   timeEntries: TimeEntry[];
   projectTimeEntries: ProjectTimeEntry[];
+  taskDependencies: TaskDependency[];
+  dependencyBypasses: DependencyBypass[];
 }
 
 const STORAGE_KEY = 'clarity-db';
@@ -31,6 +35,8 @@ export function emptyDB(): ClarityDB {
     subtasks: [],
     timeEntries: [],
     projectTimeEntries: [],
+    taskDependencies: [],
+    dependencyBypasses: [],
   };
 }
 
@@ -60,6 +66,8 @@ export function loadDB(): ClarityDB {
       projectTimeEntries: Array.isArray(parsed.projectTimeEntries)
         ? parsed.projectTimeEntries
         : [],
+      taskDependencies: Array.isArray(parsed.taskDependencies) ? parsed.taskDependencies : [],
+      dependencyBypasses: Array.isArray(parsed.dependencyBypasses) ? parsed.dependencyBypasses : [],
     };
   } catch {
     return emptyDB();
@@ -111,6 +119,12 @@ export function cloneDB(db: ClarityDB): ClarityDB {
  * 让老数据（没有 target_minutes/started_at/elapsed_seconds/start_date）
  * 也能正常渲染与计时，不会因 undefined 撕裂计算。
  */
+function validInteger(value: unknown, fallback: number, min: number, max: number): number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max
+    ? value
+    : fallback;
+}
+
 function normalizeTasks(tasks: Task[]): Task[] {
   return tasks.map((t) => ({
     ...t,
@@ -119,6 +133,11 @@ function normalizeTasks(tasks: Task[]): Task[] {
       typeof t.target_minutes === 'number' && Number.isFinite(t.target_minutes)
         ? t.target_minutes
         : 25,
+    estimate_minutes: validInteger(t.estimate_minutes, 25, 1, 600),
+    dependency_mode: t.dependency_mode === 'any' ? 'any' : 'all',
+    is_blocked: t.is_blocked === true,
+    blocked_reason: typeof t.blocked_reason === 'string' ? t.blocked_reason : null,
+    blocked_at: t.blocked_at ?? null,
     started_at: t.started_at ?? null,
     elapsed_seconds:
       typeof t.elapsed_seconds === 'number' && Number.isFinite(t.elapsed_seconds)

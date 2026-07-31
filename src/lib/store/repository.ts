@@ -7,6 +7,8 @@ import type {
   ProjectTimeEntry,
   Subtask,
   Task,
+  TaskDependency,
+  DependencyBypass,
   TaskPriority,
   TaskStatus,
   TaskWithMeta,
@@ -271,6 +273,11 @@ export function createTask(db: ClarityDB, input: TaskInput): TaskWithMeta {
       typeof input.target_minutes === 'number' && Number.isFinite(input.target_minutes)
         ? input.target_minutes
         : 25,
+    estimate_minutes: input.estimate_minutes ?? 25,
+    dependency_mode: input.dependency_mode ?? 'all',
+    is_blocked: input.is_blocked ?? false,
+    blocked_reason: input.blocked_reason ?? null,
+    blocked_at: null,
     started_at: null,
     elapsed_seconds: 0,
     created_at: at,
@@ -942,6 +949,8 @@ export function exportBackup(db: ClarityDB): BackupPayload {
     subtasks: byCreated(db.subtasks),
     timeEntries: byCreated(db.timeEntries),
     projectTimeEntries: byCreated(db.projectTimeEntries),
+    taskDependencies: byCreated(db.taskDependencies),
+    dependencyBypasses: byCreated(db.dependencyBypasses),
   };
 }
 
@@ -1003,6 +1012,15 @@ export function importBackup(
         typeof task.target_minutes === 'number' && Number.isFinite(task.target_minutes)
           ? task.target_minutes
           : 25,
+      estimate_minutes:
+        typeof task.estimate_minutes === 'number' && Number.isInteger(task.estimate_minutes) &&
+        task.estimate_minutes >= 1 && task.estimate_minutes <= 600
+          ? task.estimate_minutes
+          : 25,
+      dependency_mode: task.dependency_mode === 'any' ? 'any' : 'all',
+      is_blocked: task.is_blocked === true,
+      blocked_reason: typeof task.blocked_reason === 'string' ? task.blocked_reason : null,
+      blocked_at: task.blocked_at ?? null,
       started_at: task.started_at ?? null,
       elapsed_seconds:
         typeof task.elapsed_seconds === 'number' && Number.isFinite(task.elapsed_seconds)
@@ -1059,6 +1077,31 @@ export function importBackup(
     };
     if (existing) Object.assign(existing, record);
     else db.projectTimeEntries.push(record);
+  }
+
+  for (const dependency of payload.taskDependencies ?? []) {
+    const existing = db.taskDependencies.find((item) => item.id === dependency.id);
+    const record: TaskDependency = {
+      id: dependency.id,
+      task_id: dependency.task_id,
+      depends_on_task_id: dependency.depends_on_task_id,
+      created_at: dependency.created_at,
+    };
+    if (existing) Object.assign(existing, record);
+    else db.taskDependencies.push(record);
+  }
+
+  for (const bypass of payload.dependencyBypasses ?? []) {
+    const existing = db.dependencyBypasses.find((item) => item.id === bypass.id);
+    const record: DependencyBypass = {
+      id: bypass.id,
+      task_id: bypass.task_id,
+      dependency_ids: Array.isArray(bypass.dependency_ids) ? bypass.dependency_ids : [],
+      reason: bypass.reason ?? '',
+      created_at: bypass.created_at,
+    };
+    if (existing) Object.assign(existing, record);
+    else db.dependencyBypasses.push(record);
   }
 
   return {

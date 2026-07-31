@@ -1,4 +1,4 @@
-import { PROJECT_COLORS, type ProjectColor, type ProjectStatus, type TaskPriority, type TaskStatus } from '@/types/project';
+import { PROJECT_COLORS, type DependencyMode, type ProjectColor, type ProjectStatus, type TaskPriority, type TaskStatus } from '@/types/project';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -42,6 +42,10 @@ export interface TaskInput {
   due_date: string | null;
   start_date: string | null;
   target_minutes?: number;
+  estimate_minutes?: number;
+  dependency_mode?: DependencyMode;
+  is_blocked?: boolean;
+  blocked_reason?: string | null;
 }
 
 export interface SubtaskInput {
@@ -116,6 +120,10 @@ export function parseTaskInput(raw: unknown, partial = false): Partial<TaskInput
     if ('due_date' in input) result.due_date = optionalDate(input.due_date, '截止日期');
     if ('start_date' in input) result.start_date = optionalDate(input.start_date, '开始日期');
     if ('target_minutes' in input) result.target_minutes = parseTargetMinutes(input.target_minutes);
+    if ('estimate_minutes' in input) result.estimate_minutes = parseEstimateMinutes(input.estimate_minutes);
+    if ('dependency_mode' in input) result.dependency_mode = parseDependencyMode(input.dependency_mode);
+    if ('is_blocked' in input) result.is_blocked = input.is_blocked === true;
+    if ('blocked_reason' in input) result.blocked_reason = parseBlockedReason(input.blocked_reason);
     return result;
   }
 
@@ -127,6 +135,16 @@ export function parseTaskInput(raw: unknown, partial = false): Partial<TaskInput
   const target_minutes = 'target_minutes' in input
     ? parseTargetMinutes(input.target_minutes)
     : undefined;
+  const estimate_minutes = 'estimate_minutes' in input
+    ? parseEstimateMinutes(input.estimate_minutes)
+    : 25;
+  const dependency_mode = 'dependency_mode' in input
+    ? parseDependencyMode(input.dependency_mode)
+    : 'all';
+  const is_blocked = input.is_blocked === true;
+  const blocked_reason = 'blocked_reason' in input
+    ? parseBlockedReason(input.blocked_reason)
+    : null;
   if (!statusValues.includes(status)) throw new Error('任务状态不支持');
   if (!priorityValues.includes(priority)) throw new Error('优先级不支持');
   return {
@@ -137,6 +155,10 @@ export function parseTaskInput(raw: unknown, partial = false): Partial<TaskInput
     priority,
     due_date: optionalDate(input.due_date, '截止日期'),
     start_date: optionalDate(input.start_date, '开始日期'),
+    estimate_minutes,
+    dependency_mode,
+    is_blocked,
+    blocked_reason,
     ...(target_minutes == null ? {} : { target_minutes }),
   };
 }
@@ -147,6 +169,24 @@ function parseTargetMinutes(value: unknown): number {
     throw new Error('专注时长需为 1–600 的整数分钟');
   }
   return minutes;
+}
+
+function parseEstimateMinutes(value: unknown): number {
+  const minutes = Number(value);
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 600) {
+    throw new Error('预计时长需为 1–600 的整数分钟');
+  }
+  return minutes;
+}
+
+function parseDependencyMode(value: unknown): DependencyMode {
+  if (value !== 'all' && value !== 'any') throw new Error('依赖模式不支持');
+  return value;
+}
+
+function parseBlockedReason(value: unknown): string | null {
+  if (value == null || value === '') return null;
+  return trimString(value, '阻塞原因', 1, 200);
 }
 
 export function parseSubtaskInput(raw: unknown): SubtaskInput {

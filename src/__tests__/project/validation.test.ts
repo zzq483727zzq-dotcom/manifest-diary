@@ -28,6 +28,30 @@ describe('project validation', () => {
     const task = parseTaskInput({ project_id: 'p1', title: '写首页', target_minutes: 45 });
     expect(task).toMatchObject({ target_minutes: 45 });
   });
+
+  it('parses estimate and dependency defaults', () => {
+    const task = parseTaskInput({ project_id: 'p1', title: '写首页' });
+    expect(task).toMatchObject({
+      estimate_minutes: 25,
+      dependency_mode: 'all',
+      is_blocked: false,
+      blocked_reason: null,
+    });
+  });
+
+  it('rejects invalid estimate and dependency mode', () => {
+    expect(() => parseTaskInput({
+      project_id: 'p1',
+      title: '写首页',
+      estimate_minutes: 0,
+    })).toThrow('预计时长需为 1–600 的整数分钟');
+    expect(() => parseTaskInput({
+      project_id: 'p1',
+      title: '写首页',
+      dependency_mode: 'sometimes',
+    })).toThrow('依赖模式不支持');
+  });
+
   it('validates time entry bounds', () => {
     expect(() => parseTimeEntryInput({ minutes: 0 }, '2026-07-28')).toThrow('1–1440');
     expect(() => parseTimeEntryInput({ minutes: 30, logged_date: '2099-01-01' }, '2026-07-28')).toThrow(
