@@ -421,6 +421,10 @@ export function deleteTask(db: ClarityDB, id: string) {
   const at = nowIso();
   db.timeEntries = db.timeEntries.filter((entry) => entry.task_id !== id);
   db.subtasks = db.subtasks.filter((sub) => sub.task_id !== id);
+  db.taskDependencies = db.taskDependencies.filter(
+    (dependency) => dependency.task_id !== id && dependency.depends_on_task_id !== id,
+  );
+  db.dependencyBypasses = db.dependencyBypasses.filter((bypass) => bypass.task_id !== id);
   db.tasks = db.tasks.filter((task) => task.id !== id);
   touchProject(db, existing.project_id, at);
 }
@@ -1038,6 +1042,8 @@ export function importBackup(
   subtasks: number;
   timeEntries: number;
   projectTimeEntries: number;
+  taskDependencies: number;
+  dependencyBypasses: number;
 } {
   if (!payload || payload.version !== 1) throw new Error('备份格式不支持');
   if (!Array.isArray(payload.projects) || !Array.isArray(payload.tasks)) {
@@ -1186,6 +1192,8 @@ export function importBackup(
     subtasks: (payload.subtasks ?? []).length,
     timeEntries: (payload.timeEntries ?? []).length,
     projectTimeEntries: (payload.projectTimeEntries ?? []).length,
+    taskDependencies: normalizeTaskDependencies(payload.taskDependencies).length,
+    dependencyBypasses: normalizeDependencyBypasses(payload.dependencyBypasses).length,
   };
 }
 
