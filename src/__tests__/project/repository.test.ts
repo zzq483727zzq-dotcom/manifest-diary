@@ -426,6 +426,7 @@ describe('task focus completion', () => {
         { id: 'dep-duplicate', task_id: taskA.id, depends_on_task_id: taskB.id, created_at: '2026-07-31T00:00:00.000Z' },
         { id: 'dep-cross', task_id: taskA.id, depends_on_task_id: otherTask.id, created_at: '2026-07-31T00:00:00.000Z' },
         { id: 'dep-self', task_id: taskA.id, depends_on_task_id: taskA.id, created_at: '2026-07-31T00:00:00.000Z' },
+        { id: 'dep-id-duplicate', task_id: taskB.id, depends_on_task_id: taskA.id, created_at: '2026-07-31T00:00:00.000Z' },
         { id: 'dep-cycle', task_id: taskB.id, depends_on_task_id: taskA.id, created_at: '2026-07-31T00:00:00.000Z' },
       ],
       dependencyBypasses: [

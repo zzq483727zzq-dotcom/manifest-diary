@@ -785,7 +785,16 @@ function TaskDrawer({
               </label>
             </div>
             {task ? (
-              <CountdownTimer task={task} readOnly={readOnly} />
+              <CountdownTimer
+                task={task}
+                readOnly={readOnly}
+                onBlockedStart={(currentTask) => {
+                  const blockers = getTaskBlockers(db, currentTask.id);
+                  if (blockers.ready) return { bypass: false };
+                  const reason = window.prompt(`任务当前被阻塞：${blockers.labels.join('；')}\n请输入绕过原因`)?.trim();
+                  return reason ? { bypass: true, reason } : null;
+                }}
+              />
             ) : null}
             <label>
               描述

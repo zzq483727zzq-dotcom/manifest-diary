@@ -7,7 +7,7 @@ import {
   finishTimer,
   pauseTimer,
   setTargetMinutes,
-  startTimer,
+  startTaskFocus,
   stopTimer,
   taskElapsedSeconds,
   taskRemainingSeconds,
@@ -32,7 +32,15 @@ function fmtSec(total: number) {
  * 到 0 响铃 + 自动把这段时间写为一条耗时记录（finishTimer），不改任务状态。
  * 专注时长用 started_at + elapsed_seconds 实时算，刷新页面/关页不丢秒。
  */
-export function CountdownTimer({ task, readOnly }: { task: Task; readOnly?: boolean }) {
+export function CountdownTimer({
+  task,
+  readOnly,
+  onBlockedStart,
+}: {
+  task: Task;
+  readOnly?: boolean;
+  onBlockedStart?: (task: Task) => { bypass: boolean; reason?: string } | null;
+}) {
   const remaining = useCountdown(task, taskRemainingSeconds);
   const running = Boolean(task.started_at);
   const completed = task.status === 'completed';
@@ -114,9 +122,9 @@ export function CountdownTimer({ task, readOnly }: { task: Task; readOnly?: bool
             type="button"
             className="primary-button"
             onClick={() => {
-              // 继续/开始：若有累计 elapsed 且没超过目标，按 started_at 重新起算；
-              // 若已到 0（上一轮完成且 elapsed 已被 finish 清零），直接开始新一轮。
-              mutate((d) => startTimer(d, task.id));
+              const bypass = onBlockedStart?.(task);
+              if (bypass === null) return;
+              mutate((d) => startTaskFocus(d, task.id, bypass ?? undefined));
             }}
           >
             {hasRun ? '继续' : '开始'}

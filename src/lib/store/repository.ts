@@ -1269,27 +1269,21 @@ function validImportedDependencies(
   dependencies: TaskDependency[],
 ): TaskDependency[] {
   const accepted: TaskDependency[] = [];
+  const seenIds = new Set(db.taskDependencies.map((dependency) => dependency.id));
   const taskById = new Map(db.tasks.map((task) => [task.id, task]));
   for (const dependency of dependencies) {
+    if (seenIds.has(dependency.id)) continue;
+    seenIds.add(dependency.id);
     const task = taskById.get(dependency.task_id);
     const prerequisite = taskById.get(dependency.depends_on_task_id);
     if (!task || !prerequisite || task.id === prerequisite.id || task.project_id !== prerequisite.project_id) continue;
     const duplicate = [...db.taskDependencies, ...accepted].some((existing) =>
-      existing.id !== dependency.id &&
       existing.task_id === dependency.task_id &&
       existing.depends_on_task_id === dependency.depends_on_task_id,
     );
     if (duplicate) continue;
-    const prior = db.taskDependencies.findIndex((existing) => existing.id === dependency.id);
-    const edges = [...db.taskDependencies, ...accepted]
-      .filter((existing) => existing.id !== dependency.id);
+    const edges = [...db.taskDependencies, ...accepted];
     if (reachesTaskInEdges(edges, dependency.depends_on_task_id, dependency.task_id)) continue;
-    if (prior >= 0) {
-      const replaced = db.taskDependencies[prior];
-      if (replaced.task_id !== dependency.task_id || replaced.depends_on_task_id !== dependency.depends_on_task_id) {
-        // The replacement is validated against the existing graph above.
-      }
-    }
     accepted.push(dependency);
   }
   return accepted;
@@ -1300,15 +1294,23 @@ function validImportedBypasses(
   bypasses: DependencyBypass[],
   acceptedDependencies: TaskDependency[],
 ): DependencyBypass[] {
-  const dependencies = [...db.taskDependencies, ...acceptedDependencies];
+  const dependencies = new Map(
+    [...db.taskDependencies, ...acceptedDependencies].map((dependency) => [dependency.id, dependency]),
+  );
+  const acceptedBypasses: DependencyBypass[] = [];
+  const seenIds = new Set(db.dependencyBypasses.map((bypass) => bypass.id));
   return bypasses.filter((bypass) => {
+    if (seenIds.has(bypass.id)) return false;
+    seenIds.add(bypass.id);
     const task = db.tasks.find((item) => item.id === bypass.task_id);
     if (!task) return false;
-    return bypass.dependency_ids.every((dependencyId) => {
-      const dependency = dependencies.find((item) => item.id === dependencyId);
+    const valid = bypass.dependency_ids.every((dependencyId) => {
+      const dependency = dependencies.get(dependencyId);
       const prerequisite = dependency && db.tasks.find((item) => item.id === dependency.depends_on_task_id);
       return dependency?.task_id === bypass.task_id && prerequisite?.status !== 'completed';
     });
+    if (valid) acceptedBypasses.push(bypass);
+    return valid;
   });
 }
 
