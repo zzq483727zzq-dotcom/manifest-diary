@@ -580,6 +580,9 @@ export function updateTask(
     startTaskFocus(db, id);
     return getTask(db, id)!;
   }
+  if (patch.status === 'todo' && existing.status === 'in_progress' && (existing.started_at || existing.elapsed_seconds > 0)) {
+    stopTimer(db, id, { note: '任务暂停' });
+  }
   const execution = normalizeExecutionInput(patch, existing);
   const at = nowIso();
   const nextTitle = patch.title != null ? patch.title : existing.title;
@@ -1354,6 +1357,11 @@ function importBackupIntoDB(
     throw new Error('备份缺少项目或任务数据');
   }
 
+  let importedProjects = 0;
+  let importedTasks = 0;
+  let importedSubtasks = 0;
+  let importedTimeEntries = 0;
+  let importedProjectTimeEntries = 0;
   for (const project of payload.projects) {
     const existing = db.projects.find((item) => item.id === project.id);
     const record: Project = {
@@ -1379,9 +1387,11 @@ function importBackupIntoDB(
     };
     if (existing) Object.assign(existing, record);
     else db.projects.push(record);
+    importedProjects += 1;
   }
 
   for (const task of payload.tasks ?? []) {
+    if (!db.projects.some((project) => project.id === task.project_id)) continue;
     const existing = db.tasks.find((item) => item.id === task.id);
     const record: Task = {
       id: task.id,
@@ -1418,9 +1428,11 @@ function importBackupIntoDB(
     const normalizedRecord = normalizeTask(record);
     if (existing) Object.assign(existing, normalizedRecord);
     else db.tasks.push(normalizedRecord);
+    importedTasks += 1;
   }
 
   for (const subtask of payload.subtasks ?? []) {
+    if (!db.tasks.some((task) => task.id === subtask.task_id)) continue;
     const existing = db.subtasks.find((item) => item.id === subtask.id);
     const record: Subtask = {
       id: subtask.id,
@@ -1433,9 +1445,11 @@ function importBackupIntoDB(
     };
     if (existing) Object.assign(existing, record);
     else db.subtasks.push(record);
+    importedSubtasks += 1;
   }
 
   for (const entry of payload.timeEntries ?? []) {
+    if (!db.tasks.some((task) => task.id === entry.task_id)) continue;
     const existing = db.timeEntries.find((item) => item.id === entry.id);
     const record: TimeEntry = {
       id: entry.id,
@@ -1448,9 +1462,11 @@ function importBackupIntoDB(
     };
     if (existing) Object.assign(existing, record);
     else db.timeEntries.push(record);
+    importedTimeEntries += 1;
   }
 
   for (const entry of payload.projectTimeEntries ?? []) {
+    if (!db.projects.some((project) => project.id === entry.project_id)) continue;
     const existing = db.projectTimeEntries.find((item) => item.id === entry.id);
     const record: ProjectTimeEntry = {
       id: entry.id,
@@ -1463,6 +1479,7 @@ function importBackupIntoDB(
     };
     if (existing) Object.assign(existing, record);
     else db.projectTimeEntries.push(record);
+    importedProjectTimeEntries += 1;
   }
 
   const importedDependencies = normalizeTaskDependencies(payload.taskDependencies);
@@ -1496,11 +1513,11 @@ function importBackupIntoDB(
   }
 
   return {
-    projects: payload.projects.length,
-    tasks: (payload.tasks ?? []).length,
-    subtasks: (payload.subtasks ?? []).length,
-    timeEntries: (payload.timeEntries ?? []).length,
-    projectTimeEntries: (payload.projectTimeEntries ?? []).length,
+    projects: importedProjects,
+    tasks: importedTasks,
+    subtasks: importedSubtasks,
+    timeEntries: importedTimeEntries,
+    projectTimeEntries: importedProjectTimeEntries,
     taskDependencies: acceptedDependencies.length,
     dependencyBypasses: acceptedBypasses.length,
   };

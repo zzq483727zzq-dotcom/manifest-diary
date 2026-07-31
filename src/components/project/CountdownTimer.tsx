@@ -147,22 +147,6 @@ export function CountdownTimer({
         >
           提前结束
         </button>
-        <button
-          type="button"
-          className="pb-ghost"
-          disabled={!hasRun}
-          onClick={() => {
-            if (!hasRun) return;
-            if (!window.confirm('停止并保存这段专注时间吗？')) return;
-            try {
-              mutate((d) => { stopTimer(d, task.id); });
-            } catch {
-              // silent
-            }
-          }}
-        >
-          停止并保存
-        </button>
       </div>
     </div>
   );

@@ -92,6 +92,18 @@ describe('task dependency repository', () => {
     expect(oldProject.updated_at).not.toBe('2020-01-01T00:00:00.000Z');
     expect(newProject.updated_at).not.toBe('2020-01-01T00:00:00.000Z');
   });
+  it('finalizes running focus when moving a task back to todo', () => {
+    const { db, taskA } = dependencyFixture();
+    taskA.status = 'in_progress';
+    taskA.started_at = '2026-07-31T00:00:00.000Z';
+    taskA.elapsed_seconds = 60;
+    updateTask(db, taskA.id, { status: 'todo' });
+    expect(taskA.status).toBe('todo');
+    expect(taskA.started_at).toBeNull();
+    expect(taskA.elapsed_seconds).toBe(0);
+    expect(db.timeEntries).toHaveLength(1);
+    expect(db.timeEntries[0].note).toBe('任务暂停');
+  });
   it('rejects starts in archived projects and finishes focus as completed', () => {
     const { db, taskA } = dependencyFixture();
     db.projects.find((project) => project.id === taskA.project_id)!.status = 'archived';
@@ -105,6 +117,28 @@ describe('task dependency repository', () => {
     expect(taskA.started_at).toBeNull();
   });
 
+  it('drops imported entities with missing references', () => {
+    const { db, taskA } = dependencyFixture();
+    const existingTaskCount = db.tasks.length;
+    const counts = importBackup(db, {
+      version: 1,
+      exported_at: '2026-07-31T00:00:00.000Z',
+      projects: [{
+        id: 'project-1', name: '项目', description: '', color: '#5EEAD4', target_date: null, start_date: null,
+        status: 'active', created_at: '2026-07-31T00:00:00.000Z', updated_at: '2026-07-31T00:00:00.000Z',
+        completed_at: null, target_minutes: 25, started_at: null, elapsed_seconds: 0,
+      }],
+      tasks: [{ ...taskA, project_id: 'missing-project' }],
+      subtasks: [{ id: 'orphan-sub', task_id: 'missing-task', title: '孤儿', is_done: false, position: 0, created_at: '2026-07-31T00:00:00.000Z', updated_at: '2026-07-31T00:00:00.000Z' }],
+      timeEntries: [{ id: 'orphan-time', task_id: 'missing-task', minutes: 10, logged_date: '2026-07-31', note: '', created_at: '2026-07-31T00:00:00.000Z', updated_at: '2026-07-31T00:00:00.000Z' }],
+      projectTimeEntries: [{ id: 'orphan-project-time', project_id: 'missing-project', minutes: 10, logged_date: '2026-07-31', note: '', created_at: '2026-07-31T00:00:00.000Z', updated_at: '2026-07-31T00:00:00.000Z' }],
+    });
+    expect(counts.tasks).toBe(0);
+    expect(counts.subtasks).toBe(0);
+    expect(counts.timeEntries).toBe(0);
+    expect(counts.projectTimeEntries).toBe(0);
+    expect(db.tasks).toHaveLength(existingTaskCount);
+  });
   it('keeps local records and leaves them unchanged when import fails', () => {
     const { db, taskA } = dependencyFixture();
     const localTitle = taskA.title;
@@ -261,7 +295,11 @@ describe('task focus completion', () => {
     importBackup(db, {
       version: 1,
       exported_at: '2026-07-31T00:00:00.000Z',
-      projects: [],
+      projects: [{
+        id: 'project-1', name: '项目', description: '', color: '#5EEAD4', target_date: null, start_date: null,
+        status: 'active', created_at: '2026-07-31T00:00:00.000Z', updated_at: '2026-07-31T00:00:00.000Z',
+        completed_at: null, target_minutes: 25, started_at: null, elapsed_seconds: 0,
+      }],
       tasks: [{
         id: 'task-1',
         project_id: 'project-1',
@@ -341,7 +379,11 @@ describe('task focus completion', () => {
     importBackup(db, {
       version: 1,
       exported_at: '2026-07-31T00:00:00.000Z',
-      projects: [],
+      projects: [{
+        id: 'project-1', name: '项目', description: '', color: '#5EEAD4', target_date: null, start_date: null,
+        status: 'active', created_at: '2026-07-31T00:00:00.000Z', updated_at: '2026-07-31T00:00:00.000Z',
+        completed_at: null, target_minutes: 25, started_at: null, elapsed_seconds: 0,
+      }],
       tasks: [{
         id: 'task-active',
         project_id: 'project-1',
