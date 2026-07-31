@@ -122,6 +122,193 @@ function getProject(db: ClarityDB, id: string): Project | null {
   return db.projects.find((project) => project.id === id) ?? null;
 }
 
+export interface TaskBlockers {
+  ready: boolean;
+  dependencyIds: string[];
+  unfinishedDependencyIds: string[];
+  externalReason: string | null;
+  labels: string[];
+}
+
+function getTaskForDependency(db: ClarityDB, id: string): Task {
+  const task = getTaskEntity(db, id);
+  if (!task) throw new Error('任务不存在');
+  return task;
+}
+
+function assertDependencyEditable(db: ClarityDB, task: Task) {
+  const project = getProject(db, task.project_id);
+  if (project?.status === 'archived') throw new Error('已归档项目不能编辑依赖');
+}
+
+function validateReason(reason: string, message: string): string {
+  if (typeof reason !== 'string') throw new Error(message);
+  const trimmed = reason.trim();
+  if (trimmed.length < 1 || trimmed.length > 200) throw new Error(message);
+  return trimmed;
+}
+
+// Dependency edges point from the blocked task to its prerequisites. A path
+// from the proposed prerequisite back to the blocked task would create a cycle.
+function reachesTask(db: ClarityDB, startTaskId: string, targetTaskId: string): boolean {
+  const visited = new Set<string>();
+  const visit = (taskId: string): boolean => {
+    if (taskId === targetTaskId) return true;
+    if (visited.has(taskId)) return false;
+    visited.add(taskId);
+    return db.taskDependencies
+      .filter((dependency) => dependency.task_id === taskId)
+      .some((dependency) => visit(dependency.depends_on_task_id));
+  };
+  return visit(startTaskId);
+}
+
+export function listTaskDependencies(db: ClarityDB, taskId: string): TaskDependency[] {
+  getTaskForDependency(db, taskId);
+  return db.taskDependencies
+    .filter((dependency) => dependency.task_id === taskId)
+    .slice()
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+}
+
+export function addTaskDependency(
+  db: ClarityDB,
+  taskId: string,
+  dependsOnTaskId: string,
+): TaskDependency {
+  const task = getTaskForDependency(db, taskId);
+  const prerequisite = getTaskForDependency(db, dependsOnTaskId);
+  assertDependencyEditable(db, task);
+  if (task.project_id !== prerequisite.project_id) throw new Error('只能依赖同一项目');
+  if (taskId === dependsOnTaskId) throw new Error('不能依赖自己');
+  if (db.taskDependencies.some(
+    (dependency) => dependency.task_id === taskId && dependency.depends_on_task_id === dependsOnTaskId,
+  )) {
+    throw new Error('依赖已经存在');
+  }
+  if (reachesTask(db, dependsOnTaskId, taskId)) throw new Error('不能形成循环依赖');
+
+  const at = nowIso();
+  const dependency: TaskDependency = {
+    id: uuid(),
+    task_id: taskId,
+    depends_on_task_id: dependsOnTaskId,
+    created_at: at,
+  };
+  db.taskDependencies.push(dependency);
+  task.updated_at = at;
+  touchProject(db, task.project_id, at);
+  return dependency;
+}
+
+export function removeTaskDependency(db: ClarityDB, dependencyId: string): void {
+  const dependency = db.taskDependencies.find((item) => item.id === dependencyId);
+  if (!dependency) throw new Error('依赖不存在');
+  const task = getTaskForDependency(db, dependency.task_id);
+  assertDependencyEditable(db, task);
+  const at = nowIso();
+  db.taskDependencies = db.taskDependencies.filter((item) => item.id !== dependencyId);
+  task.updated_at = at;
+  touchProject(db, task.project_id, at);
+}
+
+export function getTaskBlockers(db: ClarityDB, taskId: string): TaskBlockers {
+  const task = getTaskForDependency(db, taskId);
+  const dependencies = listTaskDependencies(db, taskId);
+  const unfinishedDependencyIds = dependencies
+    .map((dependency) => dependency.depends_on_task_id)
+    .filter((dependencyTaskId) => {
+      const dependencyTask = db.tasks.find((item) => item.id === dependencyTaskId);
+      return dependencyTask?.status !== 'completed';
+    });
+  const externalReason = task.is_blocked ? task.blocked_reason : null;
+  const dependencyBlocked = task.dependency_mode === 'any'
+    ? dependencies.length > 0 && unfinishedDependencyIds.length === dependencies.length
+    : unfinishedDependencyIds.length > 0;
+  const labels: string[] = [];
+  if (dependencyBlocked) {
+    labels.push(`等待前置任务（${unfinishedDependencyIds.length}/${dependencies.length}）`);
+  }
+  if (externalReason) labels.push(`外部阻塞：${externalReason}`);
+  return {
+    ready: !dependencyBlocked && externalReason === null,
+    dependencyIds: dependencies.map((dependency) => dependency.id),
+    unfinishedDependencyIds,
+    externalReason,
+    labels,
+  };
+}
+
+export function canTaskStart(db: ClarityDB, taskId: string): TaskBlockers {
+  return getTaskBlockers(db, taskId);
+}
+
+export function setTaskBlocked(db: ClarityDB, taskId: string, reason: string): void {
+  const task = getTaskForDependency(db, taskId);
+  assertDependencyEditable(db, task);
+  const normalizedReason = validateReason(reason, '阻塞原因不能为空');
+  const at = nowIso();
+  task.is_blocked = true;
+  task.blocked_reason = normalizedReason;
+  task.blocked_at = at;
+  task.updated_at = at;
+  touchProject(db, task.project_id, at);
+}
+
+export function clearTaskBlocked(db: ClarityDB, taskId: string): void {
+  const task = getTaskForDependency(db, taskId);
+  assertDependencyEditable(db, task);
+  const at = nowIso();
+  task.is_blocked = false;
+  task.blocked_reason = null;
+  task.blocked_at = null;
+  task.updated_at = at;
+  touchProject(db, task.project_id, at);
+}
+
+export function listDependencyBypasses(db: ClarityDB, taskId: string): DependencyBypass[] {
+  getTaskForDependency(db, taskId);
+  return db.dependencyBypasses
+    .filter((bypass) => bypass.task_id === taskId)
+    .slice()
+    .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id));
+}
+
+export function recordDependencyBypass(
+  db: ClarityDB,
+  taskId: string,
+  dependencyIds: string[],
+  reason: string,
+): DependencyBypass {
+  const task = getTaskForDependency(db, taskId);
+  assertDependencyEditable(db, task);
+  const normalizedReason = validateReason(reason, '绕过原因不能为空');
+  if (!Array.isArray(dependencyIds)) throw new Error('依赖记录格式不正确');
+  const uniqueIds = [...new Set(dependencyIds)];
+  if (uniqueIds.some((dependencyId) => typeof dependencyId !== 'string' || !dependencyId.trim())) {
+    throw new Error('依赖记录格式不正确');
+  }
+  if (uniqueIds.some((dependencyId) => {
+    const dependency = db.taskDependencies.find((item) => item.id === dependencyId);
+    return !dependency || dependency.task_id !== taskId;
+  })) {
+    throw new Error('依赖记录不属于当前任务');
+  }
+
+  const at = nowIso();
+  const bypass: DependencyBypass = {
+    id: uuid(),
+    task_id: taskId,
+    dependency_ids: uniqueIds,
+    reason: normalizedReason,
+    created_at: at,
+  };
+  db.dependencyBypasses.push(bypass);
+  task.updated_at = at;
+  touchProject(db, task.project_id, at);
+  return bypass;
+}
+
 function validateExecutionFields(input: Partial<TaskInput>, current?: Task) {
   if (input.estimate_minutes !== undefined &&
     (!Number.isInteger(input.estimate_minutes) || input.estimate_minutes < 1 || input.estimate_minutes > 600)) {

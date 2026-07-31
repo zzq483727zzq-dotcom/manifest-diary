@@ -1,16 +1,114 @@
 import { describe, expect, it } from 'vitest';
 import { emptyDB } from '@/lib/store/store';
 import {
+  addTaskDependency,
+  canTaskStart,
+  clearTaskBlocked,
   createProject,
   createTask,
   deleteProject,
   deleteTask,
   exportBackup,
+  getTaskBlockers,
   getTaskEntity,
   importBackup,
+  listDependencyBypasses,
+  listTaskDependencies,
+  recordDependencyBypass,
+  removeTaskDependency,
+  setTaskBlocked,
   updateTask,
   weekMinutes,
 } from '@/lib/store/repository';
+
+function dependencyFixture() {
+  const db = emptyDB();
+  const project = createProject(db, {
+    name: '主项目', description: '', color: '#5EEAD4', target_date: null, start_date: null,
+  });
+  const otherProject = createProject(db, {
+    name: '其他项目', description: '', color: '#7DD3FC', target_date: null, start_date: null,
+  });
+  const taskInput = (project_id: string, title: string) => ({
+    project_id, title, description: '', status: 'todo' as const, priority: 'medium' as const,
+    due_date: null, start_date: null,
+  });
+  const taskA = createTask(db, taskInput(project.id, '前置一'));
+  const taskB = createTask(db, taskInput(project.id, '前置二'));
+  const taskC = createTask(db, taskInput(project.id, '后置任务'));
+  const otherTask = createTask(db, taskInput(otherProject.id, '跨项目任务'));
+  return {
+    db,
+    taskA: getTaskEntity(db, taskA.id)!,
+    taskB: getTaskEntity(db, taskB.id)!,
+    taskC: getTaskEntity(db, taskC.id)!,
+    otherTask: getTaskEntity(db, otherTask.id)!,
+  };
+}
+
+describe('task dependency repository', () => {
+  it('accepts same-project dependencies and rejects duplicate, cross-project, self, and cyclic edges', () => {
+    const { db, taskA, taskB, taskC, otherTask } = dependencyFixture();
+    const dependency = addTaskDependency(db, taskB.id, taskA.id);
+
+    expect(dependency).toMatchObject({ task_id: taskB.id, depends_on_task_id: taskA.id });
+    expect(listTaskDependencies(db, taskB.id)).toEqual([dependency]);
+    expect(() => addTaskDependency(db, taskB.id, taskA.id)).toThrow('依赖已经存在');
+    expect(() => addTaskDependency(db, taskB.id, taskB.id)).toThrow('不能依赖自己');
+    expect(() => addTaskDependency(db, taskC.id, otherTask.id)).toThrow('只能依赖同一项目');
+    addTaskDependency(db, taskC.id, taskB.id);
+    expect(() => addTaskDependency(db, taskA.id, taskC.id)).toThrow('不能形成循环依赖');
+
+    removeTaskDependency(db, dependency.id);
+    expect(listTaskDependencies(db, taskB.id)).toEqual([]);
+    expect(() => removeTaskDependency(db, dependency.id)).toThrow('依赖不存在');
+  });
+
+  it('supports all and any dependency readiness without mutating the database', () => {
+    const { db, taskA, taskB, taskC } = dependencyFixture();
+    const first = addTaskDependency(db, taskC.id, taskA.id);
+    const second = addTaskDependency(db, taskC.id, taskB.id);
+
+    expect(canTaskStart(db, taskC.id)).toMatchObject({
+      ready: false, dependencyIds: [first.id, second.id],
+      unfinishedDependencyIds: [taskA.id, taskB.id], externalReason: null,
+    });
+    expect(taskC.dependency_mode).toBe('all');
+
+    taskA.status = 'completed';
+    expect(getTaskBlockers(db, taskC.id)).toMatchObject({
+      ready: false, unfinishedDependencyIds: [taskB.id],
+    });
+    taskC.dependency_mode = 'any';
+    expect(canTaskStart(db, taskC.id)).toMatchObject({
+      ready: true, unfinishedDependencyIds: [taskB.id],
+    });
+    expect(taskC.status).toBe('todo');
+
+    taskA.status = 'todo';
+    expect(canTaskStart(db, taskC.id).ready).toBe(false);
+  });
+
+  it('records and clears external blocking while preserving bypass history', () => {
+    const { db, taskA, taskC } = dependencyFixture();
+    const dependency = addTaskDependency(db, taskC.id, taskA.id);
+
+    setTaskBlocked(db, taskC.id, '等待客户确认');
+    expect(getTaskBlockers(db, taskC.id)).toMatchObject({
+      ready: false, externalReason: '等待客户确认', unfinishedDependencyIds: [taskA.id],
+    });
+    expect(() => setTaskBlocked(db, taskC.id, '   ')).toThrow('阻塞原因不能为空');
+
+    const bypass = recordDependencyBypass(db, taskC.id, [dependency.id], '先处理可独立部分');
+    expect(listDependencyBypasses(db, taskC.id)).toEqual([bypass]);
+    expect(bypass.dependency_ids).toEqual([dependency.id]);
+    expect(() => recordDependencyBypass(db, taskC.id, [dependency.id], '   ')).toThrow('绕过原因不能为空');
+
+    clearTaskBlocked(db, taskC.id);
+    expect(getTaskBlockers(db, taskC.id).externalReason).toBeNull();
+    expect(listDependencyBypasses(db, taskC.id)).toHaveLength(1);
+  });
+});
 
 describe('task focus completion', () => {
   it('records focused time when a focused task is completed', () => {
