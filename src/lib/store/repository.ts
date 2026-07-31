@@ -26,6 +26,9 @@ import type {
 } from '@/lib/project/validation';
 import {
   type ClarityDB,
+  normalizeDependencyBypasses,
+  normalizeTask,
+  normalizeTaskDependencies,
   nowIso,
   todayStr,
   uuid,
@@ -117,6 +120,53 @@ function nextTaskPosition(
 
 function getProject(db: ClarityDB, id: string): Project | null {
   return db.projects.find((project) => project.id === id) ?? null;
+}
+
+function validateExecutionFields(input: Partial<TaskInput>, current?: Task) {
+  if (input.estimate_minutes !== undefined &&
+    (!Number.isInteger(input.estimate_minutes) || input.estimate_minutes < 1 || input.estimate_minutes > 600)) {
+    throw new Error('预计时长需为 1–600 的整数分钟');
+  }
+  if (input.dependency_mode !== undefined && input.dependency_mode !== 'all' && input.dependency_mode !== 'any') {
+    throw new Error('依赖模式不支持');
+  }
+  if (input.is_blocked !== undefined && typeof input.is_blocked !== 'boolean') {
+    throw new Error('阻塞状态格式不正确');
+  }
+  if (input.blocked_at !== undefined && input.blocked_at !== null &&
+    (typeof input.blocked_at !== 'string' || !Number.isFinite(Date.parse(input.blocked_at)))) {
+    throw new Error('阻塞时间格式不正确');
+  }
+  const nextBlocked = input.is_blocked ?? current?.is_blocked ?? false;
+  const nextReason = input.blocked_reason !== undefined
+    ? input.blocked_reason
+    : current?.blocked_reason ?? null;
+  if (input.blocked_reason !== undefined && nextReason !== null) {
+    if (typeof nextReason !== 'string' || nextReason.trim().length < 1 || nextReason.trim().length > 200) {
+      throw new Error('阻塞原因不能为空');
+    }
+  }
+  if (nextBlocked && (!nextReason || nextReason.trim().length === 0)) {
+    throw new Error('阻塞原因不能为空');
+  }
+}
+
+function normalizeExecutionInput(input: Partial<TaskInput>, current?: Task) {
+  validateExecutionFields(input, current);
+  const is_blocked = input.is_blocked ?? current?.is_blocked ?? false;
+  const blocked_reason = is_blocked
+    ? (input.blocked_reason ?? current?.blocked_reason ?? null)!.trim()
+    : null;
+  const blocked_at = is_blocked
+    ? input.blocked_at ?? current?.blocked_at ?? nowIso()
+    : null;
+  return {
+    ...(input.estimate_minutes === undefined ? {} : { estimate_minutes: input.estimate_minutes }),
+    ...(input.dependency_mode === undefined ? {} : { dependency_mode: input.dependency_mode }),
+    ...(input.is_blocked === undefined ? { is_blocked } : { is_blocked }),
+    ...(input.blocked_reason === undefined ? { blocked_reason } : { blocked_reason }),
+    ...(input.blocked_at === undefined ? { blocked_at } : { blocked_at }),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -255,9 +305,7 @@ export function createTask(db: ClarityDB, input: TaskInput): TaskWithMeta {
   const project = getProject(db, input.project_id);
   if (!project) throw new Error('项目不存在');
   if (project.status === 'archived') throw new Error('已归档项目不能新增任务');
-  if (input.is_blocked && (!input.blocked_reason || input.blocked_reason.trim().length > 200)) {
-    throw new Error('阻塞原因不能为空');
-  }
+  const execution = normalizeExecutionInput(input);
 
   const id = uuid();
   const at = nowIso();
@@ -276,11 +324,11 @@ export function createTask(db: ClarityDB, input: TaskInput): TaskWithMeta {
       typeof input.target_minutes === 'number' && Number.isFinite(input.target_minutes)
         ? input.target_minutes
         : 25,
-    estimate_minutes: input.estimate_minutes ?? 25,
-    dependency_mode: input.dependency_mode ?? 'all',
-    is_blocked: input.is_blocked ?? false,
-    blocked_reason: input.is_blocked ? input.blocked_reason ?? null : null,
-    blocked_at: input.is_blocked ? nowIso() : null,
+    estimate_minutes: execution.estimate_minutes ?? 25,
+    dependency_mode: execution.dependency_mode ?? 'all',
+    is_blocked: execution.is_blocked ?? false,
+    blocked_reason: execution.blocked_reason ?? null,
+    blocked_at: execution.blocked_at ?? null,
     started_at: null,
     elapsed_seconds: 0,
     created_at: at,
@@ -305,58 +353,40 @@ export function updateTask(
   if (!nextProject) throw new Error('项目不存在');
   if (nextProject.status === 'archived') throw new Error('不能移动到已归档项目');
 
+  const execution = normalizeExecutionInput(patch, existing);
   const at = nowIso();
-  if (patch.title != null) existing.title = patch.title;
-  if (patch.description != null) existing.description = patch.description;
+  const nextTitle = patch.title != null ? patch.title : existing.title;
+  const nextDescription = patch.description != null ? patch.description : existing.description;
+  const nextPriority = patch.priority != null ? patch.priority : existing.priority;
+  const nextDueDate = patch.due_date !== undefined ? patch.due_date : existing.due_date;
+  const nextStartDate = patch.start_date !== undefined ? patch.start_date : existing.start_date;
+  const nextStatus = patch.status ?? existing.status;
+  const nextTask = normalizeTask({
+    ...existing,
+    title: nextTitle,
+    description: nextDescription,
+    priority: nextPriority,
+    due_date: nextDueDate,
+    start_date: nextStartDate,
+    status: nextStatus,
+    ...execution,
+  });
+  if (nextTask.is_blocked && (!nextTask.blocked_reason || !nextTask.blocked_at)) {
+    throw new Error('阻塞原因不能为空');
+  }
   // 旧状态先记下，用于：completed 保留 completed_at、以及"切到完成时自动停计时"。
   const prevStatus = existing.status;
-  const status = patch.status ?? prevStatus;
-  if (patch.priority != null) existing.priority = patch.priority;
-  if (patch.due_date !== undefined) existing.due_date = patch.due_date;
-  if (patch.start_date !== undefined) existing.start_date = patch.start_date;
-  if (patch.estimate_minutes !== undefined) {
-    if (!Number.isInteger(patch.estimate_minutes) || patch.estimate_minutes < 1 || patch.estimate_minutes > 600) {
-      throw new Error('预计时长需为 1–600 的整数分钟');
-    }
-    existing.estimate_minutes = patch.estimate_minutes;
-  }
-  if (patch.dependency_mode !== undefined) {
-    if (patch.dependency_mode !== 'all' && patch.dependency_mode !== 'any') {
-      throw new Error('依赖模式不支持');
-    }
-    existing.dependency_mode = patch.dependency_mode;
-  }
-  if (patch.is_blocked !== undefined) {
-    if (typeof patch.is_blocked !== 'boolean') throw new Error('阻塞状态格式不正确');
-    if (patch.is_blocked && patch.blocked_reason === undefined && !existing.blocked_reason) {
-      throw new Error('阻塞原因不能为空');
-    }
-    existing.is_blocked = patch.is_blocked;
-    if (!patch.is_blocked) {
-      existing.blocked_reason = null;
-      existing.blocked_at = null;
-    } else if (!existing.blocked_at) {
-      existing.blocked_at = at;
-    }
-  }
-  if (patch.blocked_reason !== undefined) {
-    if (patch.blocked_reason == null || patch.blocked_reason === '') {
-      if (existing.is_blocked) throw new Error('阻塞原因不能为空');
-      existing.blocked_reason = null;
-    } else {
-      const reason = patch.blocked_reason.trim();
-      if (reason.length < 1 || reason.length > 200) throw new Error('阻塞原因不能为空');
-      existing.blocked_reason = reason;
-      if (!existing.is_blocked) existing.is_blocked = true;
-      if (!existing.blocked_at) existing.blocked_at = at;
-    }
-  }
-  if (patch.blocked_at !== undefined) {
-    if (patch.blocked_at != null && (typeof patch.blocked_at !== 'string' || !Number.isFinite(Date.parse(patch.blocked_at)))) {
-      throw new Error('阻塞时间格式不正确');
-    }
-    existing.blocked_at = existing.is_blocked ? patch.blocked_at ?? at : null;
-  }
+  const status = nextTask.status;
+  existing.title = nextTask.title;
+  existing.description = nextTask.description;
+  existing.priority = nextTask.priority;
+  existing.due_date = nextTask.due_date;
+  existing.start_date = nextTask.start_date;
+  existing.estimate_minutes = nextTask.estimate_minutes;
+  existing.dependency_mode = nextTask.dependency_mode;
+  existing.is_blocked = nextTask.is_blocked;
+  existing.blocked_reason = nextTask.blocked_reason;
+  existing.blocked_at = nextTask.blocked_at;
   // 切到「已完成」时，无论计时正在运行还是已暂停，都把累计专注落账。
   if (
     status === 'completed' &&
@@ -1064,14 +1094,8 @@ export function importBackup(
           : 25,
       dependency_mode: task.dependency_mode === 'any' ? 'any' : 'all',
       is_blocked: task.is_blocked === true,
-      blocked_reason:
-        task.is_blocked === true && typeof task.blocked_reason === 'string'
-          ? task.blocked_reason.trim().slice(0, 200) || null
-          : null,
-      blocked_at:
-        task.is_blocked === true && typeof task.blocked_at === 'string' && Number.isFinite(Date.parse(task.blocked_at))
-          ? task.blocked_at
-          : null,
+      blocked_reason: typeof task.blocked_reason === 'string' ? task.blocked_reason : null,
+      blocked_at: task.blocked_at ?? null,
       started_at: task.started_at ?? null,
       elapsed_seconds:
         typeof task.elapsed_seconds === 'number' && Number.isFinite(task.elapsed_seconds)
@@ -1081,8 +1105,9 @@ export function importBackup(
       updated_at: task.updated_at,
       completed_at: task.completed_at,
     };
-    if (existing) Object.assign(existing, record);
-    else db.tasks.push(record);
+    const normalizedRecord = normalizeTask(record);
+    if (existing) Object.assign(existing, normalizedRecord);
+    else db.tasks.push(normalizedRecord);
   }
 
   for (const subtask of payload.subtasks ?? []) {
@@ -1130,10 +1155,7 @@ export function importBackup(
     else db.projectTimeEntries.push(record);
   }
 
-  for (const dependency of payload.taskDependencies ?? []) {
-    if (!dependency || typeof dependency !== 'object' || typeof dependency.id !== 'string' ||
-      typeof dependency.task_id !== 'string' || typeof dependency.depends_on_task_id !== 'string' ||
-      typeof dependency.created_at !== 'string') continue;
+  for (const dependency of normalizeTaskDependencies(payload.taskDependencies)) {
     const existing = db.taskDependencies.find((item) => item.id === dependency.id);
     const record: TaskDependency = {
       id: dependency.id,
@@ -1145,17 +1167,13 @@ export function importBackup(
     else db.taskDependencies.push(record);
   }
 
-  for (const bypass of payload.dependencyBypasses ?? []) {
-    if (!bypass || typeof bypass !== 'object' || typeof bypass.id !== 'string' ||
-      typeof bypass.task_id !== 'string' || typeof bypass.created_at !== 'string') continue;
+  for (const bypass of normalizeDependencyBypasses(payload.dependencyBypasses)) {
     const existing = db.dependencyBypasses.find((item) => item.id === bypass.id);
     const record: DependencyBypass = {
       id: bypass.id,
       task_id: bypass.task_id,
-      dependency_ids: Array.isArray(bypass.dependency_ids)
-        ? bypass.dependency_ids.filter((id): id is string => typeof id === 'string')
-        : [],
-      reason: typeof bypass.reason === 'string' ? bypass.reason.trim().slice(0, 200) : '',
+      dependency_ids: bypass.dependency_ids,
+      reason: bypass.reason,
       created_at: bypass.created_at,
     };
     if (existing) Object.assign(existing, record);

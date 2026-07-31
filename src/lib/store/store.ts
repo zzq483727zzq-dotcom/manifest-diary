@@ -135,54 +135,74 @@ function normalizeBlockedAt(value: unknown): string | null {
   return typeof value === 'string' && Number.isFinite(Date.parse(value)) ? value : null;
 }
 
-function normalizeTaskDependencies(value: unknown): TaskDependency[] {
+export function normalizeTaskDependencies(value: unknown): TaskDependency[] {
   if (!Array.isArray(value)) return [];
-  return value.filter((item): item is TaskDependency => Boolean(item && typeof item === 'object'))
-    .filter((item) => typeof item.id === 'string' && typeof item.task_id === 'string' &&
-      typeof item.depends_on_task_id === 'string' && typeof item.created_at === 'string')
-    .map((item) => ({
-      id: item.id,
-      task_id: item.task_id,
-      depends_on_task_id: item.depends_on_task_id,
-      created_at: item.created_at,
-    }));
+  return value
+    .filter((item): item is TaskDependency => Boolean(item && typeof item === 'object'))
+    .map((item) => {
+      const id = typeof item.id === 'string' ? item.id.trim() : '';
+      const task_id = typeof item.task_id === 'string' ? item.task_id.trim() : '';
+      const depends_on_task_id = typeof item.depends_on_task_id === 'string'
+        ? item.depends_on_task_id.trim()
+        : '';
+      const created_at = typeof item.created_at === 'string' ? item.created_at : '';
+      if (!id || !task_id || !depends_on_task_id || !Number.isFinite(Date.parse(created_at))) {
+        return null;
+      }
+      return { id, task_id, depends_on_task_id, created_at };
+    })
+    .filter((item): item is TaskDependency => item !== null);
 }
 
-function normalizeDependencyBypasses(value: unknown): DependencyBypass[] {
+export function normalizeDependencyBypasses(value: unknown): DependencyBypass[] {
   if (!Array.isArray(value)) return [];
-  return value.filter((item): item is DependencyBypass => Boolean(item && typeof item === 'object'))
-    .filter((item) => typeof item.id === 'string' && typeof item.task_id === 'string' &&
-      typeof item.created_at === 'string')
-    .map((item) => ({
-      id: item.id,
-      task_id: item.task_id,
-      dependency_ids: Array.isArray(item.dependency_ids)
-        ? item.dependency_ids.filter((id): id is string => typeof id === 'string')
-        : [],
-      reason: typeof item.reason === 'string' ? item.reason.trim().slice(0, 200) : '',
-      created_at: item.created_at,
-    }));
+  return value
+    .filter((item): item is DependencyBypass => Boolean(item && typeof item === 'object'))
+    .map((item) => {
+      const id = typeof item.id === 'string' ? item.id.trim() : '';
+      const task_id = typeof item.task_id === 'string' ? item.task_id.trim() : '';
+      const created_at = typeof item.created_at === 'string' ? item.created_at : '';
+      const reason = normalizeBlockedReason(item.reason);
+      const dependency_ids = Array.isArray(item.dependency_ids)
+        ? item.dependency_ids
+            .filter((dependencyId): dependencyId is string => typeof dependencyId === 'string')
+            .map((dependencyId) => dependencyId.trim())
+            .filter(Boolean)
+        : [];
+      if (!id || !task_id || !reason || !Number.isFinite(Date.parse(created_at))) return null;
+      return { id, task_id, dependency_ids, reason, created_at };
+    })
+    .filter((item): item is DependencyBypass => item !== null);
+}
+
+export function normalizeTask(task: Task): Task {
+  const estimate_minutes = validInteger(task.estimate_minutes, 25, 1, 600);
+  const dependency_mode = task.dependency_mode === 'any' ? 'any' : 'all';
+  const reason = normalizeBlockedReason(task.blocked_reason);
+  const blocked_at = normalizeBlockedAt(task.blocked_at);
+  const is_blocked = task.is_blocked === true && reason !== null && blocked_at !== null;
+  return {
+    ...task,
+    start_date: task.start_date ?? null,
+    target_minutes:
+      typeof task.target_minutes === 'number' && Number.isFinite(task.target_minutes)
+        ? task.target_minutes
+        : 25,
+    estimate_minutes,
+    dependency_mode,
+    is_blocked,
+    blocked_reason: is_blocked ? reason : null,
+    blocked_at: is_blocked ? blocked_at : null,
+    started_at: task.started_at ?? null,
+    elapsed_seconds:
+      typeof task.elapsed_seconds === 'number' && Number.isFinite(task.elapsed_seconds)
+        ? task.elapsed_seconds
+        : 0,
+  };
 }
 
 function normalizeTasks(tasks: Task[]): Task[] {
-  return tasks.map((t) => ({
-    ...t,
-    start_date: t.start_date ?? null,
-    target_minutes:
-      typeof t.target_minutes === 'number' && Number.isFinite(t.target_minutes)
-        ? t.target_minutes
-        : 25,
-    estimate_minutes: validInteger(t.estimate_minutes, 25, 1, 600),
-    dependency_mode: t.dependency_mode === 'any' ? 'any' : 'all',
-    is_blocked: t.is_blocked === true,
-    blocked_reason: t.is_blocked === true ? normalizeBlockedReason(t.blocked_reason) : null,
-    blocked_at: t.is_blocked === true ? normalizeBlockedAt(t.blocked_at) : null,
-    started_at: t.started_at ?? null,
-    elapsed_seconds:
-      typeof t.elapsed_seconds === 'number' && Number.isFinite(t.elapsed_seconds)
-        ? t.elapsed_seconds
-        : 0,
-  }));
+  return tasks.map(normalizeTask);
 }
 
 /** 项目级专注倒计时同样需要兜底三字段（老数据没有）。 */
