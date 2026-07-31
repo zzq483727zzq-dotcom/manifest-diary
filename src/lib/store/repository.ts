@@ -26,6 +26,7 @@ import type {
 } from '@/lib/project/validation';
 import {
   type ClarityDB,
+  cloneDB,
   normalizeDependencyBypasses,
   normalizeTask,
   normalizeTaskDependencies,
@@ -575,6 +576,10 @@ export function updateTask(
     if (breaksDependencyInvariant) throw new Error('移动任务会破坏同项目依赖');
   }
 
+  if (patch.status === 'in_progress' && existing.status !== 'in_progress') {
+    startTaskFocus(db, id);
+    return getTask(db, id)!;
+  }
   const execution = normalizeExecutionInput(patch, existing);
   const at = nowIso();
   const nextTitle = patch.title != null ? patch.title : existing.title;
@@ -870,6 +875,8 @@ export function startTaskFocus(
 ): void {
   const task = getTaskForDependency(db, taskId);
   if (task.status === 'completed') return;
+  const project = getProject(db, task.project_id);
+  if (project?.status === 'archived') throw new Error('已归档项目不能开始专注');
   if (task.started_at) return;
   const blockers = canTaskStart(db, taskId);
   if (!blockers.ready) {
@@ -955,14 +962,10 @@ export function stopTimer(
   return entry;
 }
 
-/**
- * 倒计时归零时的到点处理：响铃由 UI 触发；这里只负责落账 + 归零，
- * 与 stopTimer 等价但语义上"用完了目标时长"。
- */
-export function finishTimer(db: ClarityDB, taskId: string): TimeEntry | null {
-  const entry = stopTimer(db, taskId, { note: '倒计时完成' });
-  const task = getTaskEntity(db, taskId);
-  if (!task || task.status === 'completed') return entry;
+export function finishTaskFocus(db: ClarityDB, taskId: string, note = '提前结束'): TimeEntry | null {
+  const entry = stopTimer(db, taskId, { note });
+  const task = getTaskForDependency(db, taskId);
+  if (task.status === 'completed') return entry;
   const at = nowIso();
   task.status = 'completed';
   task.completed_at = at;
@@ -970,6 +973,10 @@ export function finishTimer(db: ClarityDB, taskId: string): TimeEntry | null {
   task.position = nextTaskPosition(db, task.project_id, 'completed');
   touchProject(db, task.project_id, at);
   return entry;
+}
+
+export function finishTimer(db: ClarityDB, taskId: string): TimeEntry | null {
+  return finishTaskFocus(db, taskId, '倒计时完成');
 }
 
 /** 修改目标时长（分钟）。不影响正在跑的计时，改的是 goal 分钟。 */
@@ -1330,7 +1337,7 @@ export function exportBackup(db: ClarityDB): BackupPayload {
   };
 }
 
-export function importBackup(
+function importBackupIntoDB(
   db: ClarityDB,
   payload: BackupPayload,
 ): {
@@ -1497,6 +1504,24 @@ export function importBackup(
     taskDependencies: acceptedDependencies.length,
     dependencyBypasses: acceptedBypasses.length,
   };
+}
+
+export function importBackup(
+  db: ClarityDB,
+  payload: BackupPayload,
+): {
+  projects: number;
+  tasks: number;
+  subtasks: number;
+  timeEntries: number;
+  projectTimeEntries: number;
+  taskDependencies: number;
+  dependencyBypasses: number;
+} {
+  const staged = cloneDB(db);
+  const counts = importBackupIntoDB(staged, payload);
+  Object.assign(db, staged);
+  return counts;
 }
 
 export { todayStr };

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Task } from '@/types/project';
 import { mutate } from '@/lib/store/useStore';
 import {
-  finishTimer,
+  finishTaskFocus,
   pauseTimer,
   setTargetMinutes,
   startTaskFocus,
@@ -69,7 +69,7 @@ export function CountdownTimer({
       chime();
       // 自动落账 + 计时归零，状态不变
       mutate((draft) => {
-        finishTimer(draft, task.id);
+        finishTaskFocus(draft, task.id, '倒计时完成');
       });
     } catch {
       // 落账失败也不反复触发（闸已关）
@@ -138,7 +138,7 @@ export function CountdownTimer({
             if (!hasRun || !window.confirm('提前结束并完成这个任务吗？已专注时间会保存。')) return;
             try {
               mutate((d) => {
-                finishTimer(d, task.id);
+                finishTaskFocus(d, task.id);
               });
             } catch {
               // silent

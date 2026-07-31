@@ -9,6 +9,7 @@ import {
   deleteProject,
   deleteTask,
   exportBackup,
+  finishTaskFocus,
   getTaskBlockers,
   getTaskEntity,
   importBackup,
@@ -90,6 +91,34 @@ describe('task dependency repository', () => {
     expect(taskC.project_id).toBe(newProject.id);
     expect(oldProject.updated_at).not.toBe('2020-01-01T00:00:00.000Z');
     expect(newProject.updated_at).not.toBe('2020-01-01T00:00:00.000Z');
+  });
+  it('rejects starts in archived projects and finishes focus as completed', () => {
+    const { db, taskA } = dependencyFixture();
+    db.projects.find((project) => project.id === taskA.project_id)!.status = 'archived';
+    expect(() => startTaskFocus(db, taskA.id)).toThrow('已归档项目不能开始专注');
+
+    db.projects.find((project) => project.id === taskA.project_id)!.status = 'active';
+    taskA.elapsed_seconds = 60;
+    const entry = finishTaskFocus(db, taskA.id);
+    expect(entry?.task_id).toBe(taskA.id);
+    expect(taskA.status).toBe('completed');
+    expect(taskA.started_at).toBeNull();
+  });
+
+  it('keeps local records and leaves them unchanged when import fails', () => {
+    const { db, taskA } = dependencyFixture();
+    const localTitle = taskA.title;
+    const localCount = db.tasks.length;
+    expect(() => importBackup(db, {
+      version: 1,
+      exported_at: '2026-07-31T00:00:00.000Z',
+      projects: null as never,
+      tasks: [],
+      subtasks: [],
+      timeEntries: [],
+    })).toThrow('备份缺少项目或任务数据');
+    expect(db.tasks).toHaveLength(localCount);
+    expect(taskA.title).toBe(localTitle);
   });
   it('supports all and any dependency readiness without mutating the database', () => {
     const { db, taskA, taskB, taskC } = dependencyFixture();

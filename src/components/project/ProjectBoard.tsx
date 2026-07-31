@@ -27,7 +27,7 @@ import {
   deleteProject as deleteProjectRepo,
   deleteSubtask,
   deleteTask,
-  finishTimer,
+  finishTaskFocus,
   getTaskBlockers,
   getTask,
   getProjectSummary,
@@ -84,10 +84,11 @@ export function ProjectBoard({
     [db, project],
   );
   const [view, setView] = useState<'board' | 'list'>('board');
+  const [hydrated, setHydrated] = useState(false);
   const tasks = useMemo(() => {
     const live = listTasks(db, project.id);
-    return live.length ? live : initialTasks;
-  }, [db, project.id, initialTasks]);
+    return hydrated ? live : (live.length ? live : initialTasks);
+  }, [db, project.id, initialTasks, hydrated]);
   const [listFilter, setListFilter] = useState<'all' | 'open' | 'completed'>('all');
   const [createOpen, setCreateOpen] = useState(false);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(initialTaskId ?? null);
@@ -100,6 +101,9 @@ export function ProjectBoard({
   const [expandedCompleted, setExpandedCompleted] = useState(false);
   const [deletingProject, setDeletingProject] = useState(false);
 
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
   useEffect(() => {
     const stored = window.localStorage.getItem('clarity-project-view');
     if (stored === 'board' || stored === 'list') setView(stored);
@@ -163,17 +167,24 @@ export function ProjectBoard({
   function cycleStatus(task: TaskWithMeta) {
     const order: TaskStatus[] = ['todo', 'in_progress', 'completed'];
     const nextStatus = order[(order.indexOf(task.status) + 1) % order.length];
-    if (
-      nextStatus === 'completed' &&
-      task.subtask_total > 0 &&
-      task.subtask_done < task.subtask_total
-    ) {
+    if (nextStatus === 'in_progress') {
+      const blockers = getTaskBlockers(db, task.id);
+      const reason = blockers.ready
+        ? undefined
+        : window.prompt(`任务当前被阻塞：${blockers.labels.join('；')}\n请输入绕过原因`)?.trim();
+      if (!blockers.ready && !reason) return;
+      try {
+        mutate((draft) => startTaskFocus(draft, task.id, reason ? { bypass: true, reason } : undefined));
+      } catch {
+        // silent: status toggle is best-effort
+      }
+      return;
+    }
+    if (nextStatus === 'completed' && task.subtask_total > 0 && task.subtask_done < task.subtask_total) {
       if (!window.confirm('还有未完成的子任务，确定把父任务标为已完成吗？')) return;
     }
     try {
-      mutate((draft) => {
-        updateTask(draft, task.id, { status: nextStatus });
-      });
+      mutate((draft) => { updateTask(draft, task.id, { status: nextStatus }); });
     } catch {
       // silent: status toggle is best-effort
     }
@@ -210,7 +221,7 @@ export function ProjectBoard({
     if (task.status === 'completed') return;
     if (!window.confirm('提前结束并完成这个任务吗？已专注时间会保存。')) return;
     mutate((draft) => {
-      finishTimer(draft, task.id);
+      finishTaskFocus(draft, task.id);
     });
   }
 
@@ -354,7 +365,7 @@ export function ProjectBoard({
                         {task.started_at ? (
                           <CardCountdownChip key={task.id} task={task} />
                         ) : null}
-                        {task.status !== 'completed' ? (
+                        {task.status !== 'completed' && project.status !== 'archived' ? (
                           <div className="pb-focus-actions">
                             <button
                               type="button"
@@ -609,17 +620,25 @@ function TaskDrawer({
   }
 
   function quickStatus(next: TaskStatus) {
-    if (
-      next === 'completed' &&
-      subtasks.some((item) => !item.is_done)
-    ) {
+    if (!task) return;
+    if (next === 'in_progress' && task.status !== 'in_progress') {
+      const blockers = getTaskBlockers(db, task.id);
+      const reason = blockers.ready
+        ? undefined
+        : window.prompt(`任务当前被阻塞：${blockers.labels.join('；')}\n请输入绕过原因`)?.trim();
+      if (!blockers.ready && !reason) return;
+      try {
+        mutate((draft) => startTaskFocus(draft, task.id, reason ? { bypass: true, reason } : undefined));
+        setDirty(false);
+      } catch { /* silent */ }
+      return;
+    }
+    if (next === 'completed' && subtasks.some((item) => !item.is_done)) {
       if (!window.confirm('还有未完成的子任务，确定把父任务标为已完成吗？')) return;
     }
     setStatus(next);
     try {
-      mutate((draft) => {
-        updateTask(draft, taskId, { status: next });
-      });
+      mutate((draft) => { updateTask(draft, taskId, { status: next }); });
       setDirty(false);
     } catch {
       // silent
@@ -925,7 +944,7 @@ function CardCountdownChip({
     if (!task.started_at || remaining > 0 || finishedRef.current) return;
     finishedRef.current = true;
     mutate((draft) => {
-      finishTimer(draft, task.id);
+      finishTaskFocus(draft, task.id);
     });
   }, [remaining, task.id, task.started_at]);
 
