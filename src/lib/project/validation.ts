@@ -46,6 +46,7 @@ export interface TaskInput {
   dependency_mode?: DependencyMode;
   is_blocked?: boolean;
   blocked_reason?: string | null;
+  blocked_at?: string | null;
 }
 
 export interface SubtaskInput {
@@ -122,8 +123,10 @@ export function parseTaskInput(raw: unknown, partial = false): Partial<TaskInput
     if ('target_minutes' in input) result.target_minutes = parseTargetMinutes(input.target_minutes);
     if ('estimate_minutes' in input) result.estimate_minutes = parseEstimateMinutes(input.estimate_minutes);
     if ('dependency_mode' in input) result.dependency_mode = parseDependencyMode(input.dependency_mode);
-    if ('is_blocked' in input) result.is_blocked = input.is_blocked === true;
+    if ('is_blocked' in input) result.is_blocked = parseBlockedFlag(input.is_blocked);
     if ('blocked_reason' in input) result.blocked_reason = parseBlockedReason(input.blocked_reason);
+    if (result.is_blocked === true && !result.blocked_reason) throw new Error('阻塞原因不能为空');
+    if ('blocked_at' in input) result.blocked_at = parseBlockedAt(input.blocked_at);
     return result;
   }
 
@@ -141,10 +144,12 @@ export function parseTaskInput(raw: unknown, partial = false): Partial<TaskInput
   const dependency_mode = 'dependency_mode' in input
     ? parseDependencyMode(input.dependency_mode)
     : 'all';
-  const is_blocked = input.is_blocked === true;
+  const is_blocked = 'is_blocked' in input ? parseBlockedFlag(input.is_blocked) : false;
   const blocked_reason = 'blocked_reason' in input
     ? parseBlockedReason(input.blocked_reason)
     : null;
+  const blocked_at = 'blocked_at' in input ? parseBlockedAt(input.blocked_at) : null;
+  if (is_blocked && !blocked_reason) throw new Error('阻塞原因不能为空');
   if (!statusValues.includes(status)) throw new Error('任务状态不支持');
   if (!priorityValues.includes(priority)) throw new Error('优先级不支持');
   return {
@@ -159,6 +164,7 @@ export function parseTaskInput(raw: unknown, partial = false): Partial<TaskInput
     dependency_mode,
     is_blocked,
     blocked_reason,
+    blocked_at,
     ...(target_minutes == null ? {} : { target_minutes }),
   };
 }
@@ -187,6 +193,19 @@ function parseDependencyMode(value: unknown): DependencyMode {
 function parseBlockedReason(value: unknown): string | null {
   if (value == null || value === '') return null;
   return trimString(value, '阻塞原因', 1, 200);
+}
+
+function parseBlockedFlag(value: unknown): boolean {
+  if (typeof value !== 'boolean') throw new Error('阻塞状态格式不正确');
+  return value;
+}
+
+function parseBlockedAt(value: unknown): string | null {
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) {
+    throw new Error('阻塞时间格式不正确');
+  }
+  return value;
 }
 
 export function parseSubtaskInput(raw: unknown): SubtaskInput {

@@ -66,8 +66,8 @@ export function loadDB(): ClarityDB {
       projectTimeEntries: Array.isArray(parsed.projectTimeEntries)
         ? parsed.projectTimeEntries
         : [],
-      taskDependencies: Array.isArray(parsed.taskDependencies) ? parsed.taskDependencies : [],
-      dependencyBypasses: Array.isArray(parsed.dependencyBypasses) ? parsed.dependencyBypasses : [],
+      taskDependencies: normalizeTaskDependencies(parsed.taskDependencies),
+      dependencyBypasses: normalizeDependencyBypasses(parsed.dependencyBypasses),
     };
   } catch {
     return emptyDB();
@@ -125,6 +125,45 @@ function validInteger(value: unknown, fallback: number, min: number, max: number
     : fallback;
 }
 
+function normalizeBlockedReason(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const reason = value.trim();
+  return reason.length >= 1 && reason.length <= 200 ? reason : null;
+}
+
+function normalizeBlockedAt(value: unknown): string | null {
+  return typeof value === 'string' && Number.isFinite(Date.parse(value)) ? value : null;
+}
+
+function normalizeTaskDependencies(value: unknown): TaskDependency[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is TaskDependency => Boolean(item && typeof item === 'object'))
+    .filter((item) => typeof item.id === 'string' && typeof item.task_id === 'string' &&
+      typeof item.depends_on_task_id === 'string' && typeof item.created_at === 'string')
+    .map((item) => ({
+      id: item.id,
+      task_id: item.task_id,
+      depends_on_task_id: item.depends_on_task_id,
+      created_at: item.created_at,
+    }));
+}
+
+function normalizeDependencyBypasses(value: unknown): DependencyBypass[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is DependencyBypass => Boolean(item && typeof item === 'object'))
+    .filter((item) => typeof item.id === 'string' && typeof item.task_id === 'string' &&
+      typeof item.created_at === 'string')
+    .map((item) => ({
+      id: item.id,
+      task_id: item.task_id,
+      dependency_ids: Array.isArray(item.dependency_ids)
+        ? item.dependency_ids.filter((id): id is string => typeof id === 'string')
+        : [],
+      reason: typeof item.reason === 'string' ? item.reason.trim().slice(0, 200) : '',
+      created_at: item.created_at,
+    }));
+}
+
 function normalizeTasks(tasks: Task[]): Task[] {
   return tasks.map((t) => ({
     ...t,
@@ -136,8 +175,8 @@ function normalizeTasks(tasks: Task[]): Task[] {
     estimate_minutes: validInteger(t.estimate_minutes, 25, 1, 600),
     dependency_mode: t.dependency_mode === 'any' ? 'any' : 'all',
     is_blocked: t.is_blocked === true,
-    blocked_reason: typeof t.blocked_reason === 'string' ? t.blocked_reason : null,
-    blocked_at: t.blocked_at ?? null,
+    blocked_reason: t.is_blocked === true ? normalizeBlockedReason(t.blocked_reason) : null,
+    blocked_at: t.is_blocked === true ? normalizeBlockedAt(t.blocked_at) : null,
     started_at: t.started_at ?? null,
     elapsed_seconds:
       typeof t.elapsed_seconds === 'number' && Number.isFinite(t.elapsed_seconds)

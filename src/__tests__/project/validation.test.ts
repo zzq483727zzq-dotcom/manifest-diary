@@ -50,6 +50,21 @@ describe('project validation', () => {
       title: '写首页',
       dependency_mode: 'sometimes',
     })).toThrow('依赖模式不支持');
+    expect(() => parseTaskInput({
+      project_id: 'p1',
+      title: '写首页',
+      is_blocked: 'yes',
+    })).toThrow('阻塞状态格式不正确');
+    expect(() => parseTaskInput({
+      project_id: 'p1',
+      title: '写首页',
+      blocked_reason: '   ',
+    })).toThrow('阻塞原因不能为空');
+    expect(() => parseTaskInput({
+      project_id: 'p1',
+      title: '写首页',
+      is_blocked: true,
+    })).toThrow('阻塞原因不能为空');
   });
 
   it('validates time entry bounds', () => {
