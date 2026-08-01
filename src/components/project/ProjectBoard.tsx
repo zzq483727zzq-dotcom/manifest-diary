@@ -4,8 +4,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type {
+  DependencyMode,
   ProjectSummary,
   Subtask,
+  TaskDependency,
+  DependencyBypass,
   TaskPriority,
   TaskStatus,
   TaskWithMeta,
@@ -22,6 +25,8 @@ import { useCountdown } from '@/hooks/useCountdown';
 import { useStore, mutate } from '@/lib/store/useStore';
 import { notifyFocusCompletion } from '@/lib/project/focus-notification';
 import {
+  addTaskDependency,
+  clearTaskBlocked,
   createSubtask,
   createTask,
   deleteProject as deleteProjectRepo,
@@ -31,10 +36,14 @@ import {
   getTaskBlockers,
   getTask,
   getProjectSummary,
+  listDependencyBypasses,
   listSubtasks,
+  listTaskDependencies,
   listTasks,
   moveSubtask,
   pauseTimer,
+  removeTaskDependency,
+  setTaskBlocked,
   startTaskFocus,
   taskRemainingSeconds,
   updateSubtask,
@@ -566,6 +575,10 @@ function TaskDrawer({
   const [startDate, setStartDate] = useState('');
   const [sectionError, setSectionError] = useState('');
   const [subtaskTitle, setSubtaskTitle] = useState('');
+  const [estimateMinutes, setEstimateMinutes] = useState('25');
+  const [dependencyMode, setDependencyMode] = useState<DependencyMode>('all');
+  const [blockedReason, setBlockedReason] = useState('');
+  const [depTargetTaskId, setDepTargetTaskId] = useState('');
 
   // Seed form fields once a task is available (or when taskId changes).
   useEffect(() => {
@@ -576,6 +589,9 @@ function TaskDrawer({
     setPriority(task.priority);
     setDueDate(task.due_date || '');
     setStartDate(task.start_date || '');
+    setEstimateMinutes(String(task.estimate_minutes ?? 25));
+    setDependencyMode(task.dependency_mode ?? 'all');
+    setBlockedReason(task.blocked_reason ?? '');
     setDirty(false);
     setError('');
     setSectionError('');
@@ -584,6 +600,22 @@ function TaskDrawer({
   const minutesTotal = task?.minutes_total ?? 0;
   const projectStatus = task?.project_status ?? 'active';
   const readOnly = projectStatus === 'archived';
+  const dependencies = useMemo(
+    () => (task ? listTaskDependencies(db, taskId) : []),
+    [db, taskId, task],
+  );
+  const bypasses = useMemo(
+    () => (task ? listDependencyBypasses(db, taskId) : []),
+    [db, taskId, task],
+  );
+  const blockers = useMemo(
+    () => (task ? getTaskBlockers(db, taskId) : null),
+    [db, taskId, task],
+  );
+  const projectTasks = useMemo(
+    () => task ? listTasks(db, task.project_id).filter((t) => t.id !== taskId && t.status !== 'completed') : [],
+    [db, taskId, task],
+  );
 
   function save() {
     setSaving(true);
@@ -598,6 +630,8 @@ function TaskDrawer({
           start_date: startDate || null,
           status,
           project_id: projectId,
+          estimate_minutes: Number(estimateMinutes),
+          dependency_mode: dependencyMode,
         },
         true,
       );
@@ -800,6 +834,37 @@ function TaskDrawer({
                   }}
                 />
               </label>
+              <label>
+                预计时长
+                <div className="input-with-suffix">
+                  <input
+                    type="number"
+                    min={1}
+                    max={600}
+                    value={estimateMinutes}
+                    disabled={readOnly}
+                    onChange={(e) => {
+                      setEstimateMinutes(e.target.value);
+                      setDirty(true);
+                    }}
+                  />
+                  <span>分钟</span>
+                </div>
+              </label>
+              <label>
+                依赖模式
+                <select
+                  value={dependencyMode}
+                  disabled={readOnly}
+                  onChange={(e) => {
+                    setDependencyMode(e.target.value as DependencyMode);
+                    setDirty(true);
+                  }}
+                >
+                  <option value="all">全部完成</option>
+                  <option value="any">任一完成</option>
+                </select>
+              </label>
             </div>
             {task ? (
               <CountdownTimer
@@ -825,6 +890,143 @@ function TaskDrawer({
                 }}
               />
             </label>
+
+            {task && blockers ? (
+              <section className="drawer-section">
+                <div className="drawer-section-head">
+                  <strong>执行条件</strong>
+                  {blockers.ready ? (
+                    <span className="eco-ready">就绪</span>
+                  ) : (
+                    <span className="eco-blocked">阻塞</span>
+                  )}
+                </div>
+
+                {/* 阻塞状态 */}
+                {!blockers.ready ? (
+                  <div className="eco-blocker-list">
+                    {blockers.labels.map((label, i) => (
+                      <div key={i} className="eco-blocker-item">{label}</div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {/* 依赖列表 */}
+                {dependencies.length > 0 ? (
+                  <div className="subtask-list">
+                    {dependencies.map((dep) => {
+                      const depTask = projectTasks.find((t) => t.id === dep.depends_on_task_id);
+                      return (
+                        <div key={dep.id} className="subtask-row">
+                          <span>{depTask?.title ?? dep.depends_on_task_id}</span>
+                          {!readOnly ? (
+                            <div className="subtask-actions">
+                              <button
+                                type="button"
+                                className="text-button danger-text"
+                                onClick={() => {
+                                  mutate((draft) => {
+                                    removeTaskDependency(draft, dep.id);
+                                  });
+                                }}
+                              >
+                                移除
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="muted">没有设置依赖任务。</p>
+                )}
+
+                {/* 添加依赖 */}
+                {!readOnly && projectTasks.length > 0 ? (
+                  <form
+                    className="inline-form"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!depTargetTaskId) return;
+                      try {
+                        mutate((draft) => {
+                          addTaskDependency(draft, taskId, depTargetTaskId);
+                        });
+                        setDepTargetTaskId('');
+                      } catch (err) {
+                        setSectionError(err instanceof Error ? err.message : '添加依赖失败');
+                      }
+                    }}
+                  >
+                    <select
+                      value={depTargetTaskId}
+                      onChange={(e) => setDepTargetTaskId(e.target.value)}
+                      required
+                    >
+                      <option value="">选择依赖任务…</option>
+                      {projectTasks.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.title} ({t.status === 'completed' ? '已完成' : t.status === 'in_progress' ? '进行中' : '待办'})
+                        </option>
+                      ))}
+                    </select>
+                    <button type="submit" className="secondary-button" disabled={!depTargetTaskId}>
+                      添加
+                    </button>
+                  </form>
+                ) : null}
+
+                {/* 外部阻塞 */}
+                {!readOnly ? (
+                  <div className="eco-block-form">
+                    {task.is_blocked ? (
+                      <div className="eco-blocked-row">
+                        <span className="eco-blocked-label">已阻塞：{task.blocked_reason}</span>
+                        <button
+                          type="button"
+                          className="text-button"
+                          onClick={() => {
+                            mutate((draft) => {
+                              clearTaskBlocked(draft, taskId);
+                            });
+                          }}
+                        >
+                          解除阻塞
+                        </button>
+                      </div>
+                    ) : (
+                      <form
+                        className="inline-form"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (!blockedReason.trim()) return;
+                          try {
+                            mutate((draft) => {
+                              setTaskBlocked(draft, taskId, blockedReason.trim());
+                            });
+                            setBlockedReason('');
+                          } catch (err) {
+                            setSectionError(err instanceof Error ? err.message : '设置阻塞失败');
+                          }
+                        }}
+                      >
+                        <input
+                          value={blockedReason}
+                          onChange={(e) => setBlockedReason(e.target.value)}
+                          placeholder="阻塞原因"
+                          maxLength={200}
+                          required
+                        />
+                        <button type="submit" className="secondary-button" disabled={!blockedReason.trim()}>
+                          设为阻塞
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
 
             <section className="drawer-section">
               <div className="drawer-section-head">
@@ -899,6 +1101,25 @@ function TaskDrawer({
                 <span>累计 {formatMinutes(minutesTotal)}</span>
               </div>
             </section>
+
+            {bypasses.length > 0 ? (
+              <section className="drawer-section">
+                <div className="drawer-section-head">
+                  <strong>绕过记录</strong>
+                  <span>{bypasses.length}</span>
+                </div>
+                <div className="subtask-list">
+                  {bypasses.map((b) => (
+                    <div key={b.id} className="subtask-row">
+                      <span className="bypass-reason">{b.reason}</span>
+                      <span className="bypass-meta">
+                        {b.created_at.slice(0, 10)} · {b.dependency_ids.length > 0 ? `${b.dependency_ids.length} 条依赖` : '外部阻塞'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             {sectionError ? <p className="form-error">{sectionError}</p> : null}
             {error ? <p className="form-error">{error}</p> : null}

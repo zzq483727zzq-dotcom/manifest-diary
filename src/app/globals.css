@@ -1371,6 +1371,63 @@ body {
   color: var(--life-danger) !important;
 }
 
+/* ===== Execution condition (drawer) ===== */
+.eco-ready {
+  color: var(--life-success, #22c55e);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.eco-blocked {
+  color: var(--life-danger);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.eco-blocker-list {
+  display: grid;
+  gap: 6px;
+}
+
+.eco-blocker-item {
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--life-danger) 8%, transparent);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--life-ink);
+}
+
+.eco-block-form {
+  margin-top: 4px;
+}
+
+.eco-blocked-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--life-danger) 8%, transparent);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.eco-blocked-label {
+  flex: 1;
+  color: var(--life-ink);
+}
+
+.bypass-reason {
+  flex: 1;
+  font-size: 13px;
+  color: var(--life-ink);
+}
+
+.bypass-meta {
+  font-size: 11px;
+  color: var(--life-muted);
+  white-space: nowrap;
+}
+
 /* ===== Today desk — Cool Fog Desk / mock-aligned Operate surface ===== */
 .td {
   max-width: 1120px;

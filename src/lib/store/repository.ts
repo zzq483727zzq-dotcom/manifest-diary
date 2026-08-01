@@ -318,6 +318,8 @@ export function updateTask(
   if (patch.priority != null) existing.priority = patch.priority;
   if (patch.due_date !== undefined) existing.due_date = patch.due_date;
   if (patch.start_date !== undefined) existing.start_date = patch.start_date;
+  if (patch.estimate_minutes !== undefined) existing.estimate_minutes = patch.estimate_minutes;
+  if (patch.dependency_mode !== undefined) existing.dependency_mode = patch.dependency_mode;
 
   const at = nowIso();
   // 切到「已完成」时，无论计时正在运行还是已暂停，都把累计专注落账。
