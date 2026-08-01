@@ -44,9 +44,6 @@ export interface TaskInput {
   target_minutes?: number;
   estimate_minutes?: number;
   dependency_mode?: DependencyMode;
-  is_blocked?: boolean;
-  blocked_reason?: string | null;
-  blocked_at?: string | null;
 }
 
 export interface SubtaskInput {
@@ -120,13 +117,14 @@ export function parseTaskInput(raw: unknown, partial = false): Partial<TaskInput
     }
     if ('due_date' in input) result.due_date = optionalDate(input.due_date, '截止日期');
     if ('start_date' in input) result.start_date = optionalDate(input.start_date, '开始日期');
-    if ('target_minutes' in input) result.target_minutes = parseTargetMinutes(input.target_minutes);
-    if ('estimate_minutes' in input) result.estimate_minutes = parseEstimateMinutes(input.estimate_minutes);
-    if ('dependency_mode' in input) result.dependency_mode = parseDependencyMode(input.dependency_mode);
-    if ('is_blocked' in input) result.is_blocked = parseBlockedFlag(input.is_blocked);
-    if ('blocked_reason' in input) result.blocked_reason = parseBlockedReason(input.blocked_reason);
-    if (result.is_blocked === true && !result.blocked_reason) throw new Error('阻塞原因不能为空');
-    if ('blocked_at' in input) result.blocked_at = parseBlockedAt(input.blocked_at);
+    if ('target_minutes' in input) result.target_minutes = parseIntMinutes(input.target_minutes, '专注时长');
+    if ('estimate_minutes' in input) result.estimate_minutes = parseIntMinutes(input.estimate_minutes, '预计时长');
+    if ('dependency_mode' in input) {
+      if (input.dependency_mode !== 'all' && input.dependency_mode !== 'any') {
+        throw new Error('依赖模式不支持');
+      }
+      result.dependency_mode = input.dependency_mode as DependencyMode;
+    }
     return result;
   }
 
@@ -136,22 +134,19 @@ export function parseTaskInput(raw: unknown, partial = false): Partial<TaskInput
   const status = (input.status as TaskStatus) || 'todo';
   const priority = (input.priority as TaskPriority) || 'medium';
   const target_minutes = 'target_minutes' in input
-    ? parseTargetMinutes(input.target_minutes)
+    ? parseIntMinutes(input.target_minutes, '专注时长')
     : undefined;
   const estimate_minutes = 'estimate_minutes' in input
-    ? parseEstimateMinutes(input.estimate_minutes)
-    : 25;
+    ? parseIntMinutes(input.estimate_minutes, '预计时长')
+    : undefined;
   const dependency_mode = 'dependency_mode' in input
-    ? parseDependencyMode(input.dependency_mode)
-    : 'all';
-  const is_blocked = 'is_blocked' in input ? parseBlockedFlag(input.is_blocked) : false;
-  const blocked_reason = 'blocked_reason' in input
-    ? parseBlockedReason(input.blocked_reason)
-    : null;
-  const blocked_at = 'blocked_at' in input ? parseBlockedAt(input.blocked_at) : null;
-  if (is_blocked && !blocked_reason) throw new Error('阻塞原因不能为空');
+    ? input.dependency_mode
+    : undefined;
   if (!statusValues.includes(status)) throw new Error('任务状态不支持');
   if (!priorityValues.includes(priority)) throw new Error('优先级不支持');
+  if (dependency_mode != null && dependency_mode !== 'all' && dependency_mode !== 'any') {
+    throw new Error('依赖模式不支持');
+  }
   return {
     project_id: projectId,
     title,
@@ -160,52 +155,18 @@ export function parseTaskInput(raw: unknown, partial = false): Partial<TaskInput
     priority,
     due_date: optionalDate(input.due_date, '截止日期'),
     start_date: optionalDate(input.start_date, '开始日期'),
-    estimate_minutes,
-    dependency_mode,
-    is_blocked,
-    blocked_reason,
-    blocked_at,
     ...(target_minutes == null ? {} : { target_minutes }),
+    ...(estimate_minutes == null ? {} : { estimate_minutes }),
+    ...(dependency_mode == null ? {} : { dependency_mode: dependency_mode as DependencyMode }),
   };
 }
 
-function parseTargetMinutes(value: unknown): number {
+function parseIntMinutes(value: unknown, field: string): number {
   const minutes = Number(value);
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > 600) {
-    throw new Error('专注时长需为 1–600 的整数分钟');
+    throw new Error(`${field}需为 1–600 的整数分钟`);
   }
   return minutes;
-}
-
-function parseEstimateMinutes(value: unknown): number {
-  const minutes = Number(value);
-  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 600) {
-    throw new Error('预计时长需为 1–600 的整数分钟');
-  }
-  return minutes;
-}
-
-function parseDependencyMode(value: unknown): DependencyMode {
-  if (value !== 'all' && value !== 'any') throw new Error('依赖模式不支持');
-  return value;
-}
-
-function parseBlockedReason(value: unknown): string | null {
-  if (value == null || value === '') return null;
-  return trimString(value, '阻塞原因', 1, 200);
-}
-
-function parseBlockedFlag(value: unknown): boolean {
-  if (typeof value !== 'boolean') throw new Error('阻塞状态格式不正确');
-  return value;
-}
-
-function parseBlockedAt(value: unknown): string | null {
-  if (value == null || value === '') return null;
-  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) {
-    throw new Error('阻塞时间格式不正确');
-  }
-  return value;
 }
 
 export function parseSubtaskInput(raw: unknown): SubtaskInput {

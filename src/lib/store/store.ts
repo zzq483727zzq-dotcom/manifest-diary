@@ -66,8 +66,12 @@ export function loadDB(): ClarityDB {
       projectTimeEntries: Array.isArray(parsed.projectTimeEntries)
         ? parsed.projectTimeEntries
         : [],
-      taskDependencies: normalizeTaskDependencies(parsed.taskDependencies),
-      dependencyBypasses: normalizeDependencyBypasses(parsed.dependencyBypasses),
+      taskDependencies: Array.isArray(parsed.taskDependencies)
+        ? parsed.taskDependencies
+        : [],
+      dependencyBypasses: Array.isArray(parsed.dependencyBypasses)
+        ? parsed.dependencyBypasses
+        : [],
     };
   } catch {
     return emptyDB();
@@ -119,91 +123,28 @@ export function cloneDB(db: ClarityDB): ClarityDB {
  * 让老数据（没有 target_minutes/started_at/elapsed_seconds/start_date）
  * 也能正常渲染与计时，不会因 undefined 撕裂计算。
  */
-function validInteger(value: unknown, fallback: number, min: number, max: number): number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max
-    ? value
-    : fallback;
-}
-
-function normalizeBlockedReason(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const reason = value.trim();
-  return reason.length >= 1 && reason.length <= 200 ? reason : null;
-}
-
-function normalizeBlockedAt(value: unknown): string | null {
-  return typeof value === 'string' && Number.isFinite(Date.parse(value)) ? value : null;
-}
-
-export function normalizeTaskDependencies(value: unknown): TaskDependency[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .filter((item): item is TaskDependency => Boolean(item && typeof item === 'object'))
-    .map((item) => {
-      const id = typeof item.id === 'string' ? item.id.trim() : '';
-      const task_id = typeof item.task_id === 'string' ? item.task_id.trim() : '';
-      const depends_on_task_id = typeof item.depends_on_task_id === 'string'
-        ? item.depends_on_task_id.trim()
-        : '';
-      const created_at = typeof item.created_at === 'string' ? item.created_at : '';
-      if (!id || !task_id || !depends_on_task_id || !Number.isFinite(Date.parse(created_at))) {
-        return null;
-      }
-      return { id, task_id, depends_on_task_id, created_at };
-    })
-    .filter((item): item is TaskDependency => item !== null);
-}
-
-export function normalizeDependencyBypasses(value: unknown): DependencyBypass[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .filter((item): item is DependencyBypass => Boolean(item && typeof item === 'object'))
-    .map((item) => {
-      const id = typeof item.id === 'string' ? item.id.trim() : '';
-      const task_id = typeof item.task_id === 'string' ? item.task_id.trim() : '';
-      const created_at = typeof item.created_at === 'string' ? item.created_at : '';
-      const reason = normalizeBlockedReason(item.reason);
-      const dependency_ids = Array.isArray(item.dependency_ids)
-        ? item.dependency_ids.map((dependencyId) =>
-          typeof dependencyId === 'string' ? dependencyId.trim() : '')
-        : null;
-      if (!id || !task_id || !reason || !Number.isFinite(Date.parse(created_at)) ||
-        !dependency_ids || dependency_ids.some((dependencyId) => !dependencyId)) {
-        return null;
-      }
-      return { id, task_id, dependency_ids, reason, created_at };
-    })
-    .filter((item): item is DependencyBypass => item !== null);
-}
-
-export function normalizeTask(task: Task): Task {
-  const estimate_minutes = validInteger(task.estimate_minutes, 25, 1, 600);
-  const dependency_mode = task.dependency_mode === 'any' ? 'any' : 'all';
-  const reason = normalizeBlockedReason(task.blocked_reason);
-  const blocked_at = normalizeBlockedAt(task.blocked_at);
-  const is_blocked = task.is_blocked === true && reason !== null && blocked_at !== null;
-  return {
-    ...task,
-    start_date: task.start_date ?? null,
-    target_minutes:
-      typeof task.target_minutes === 'number' && Number.isFinite(task.target_minutes)
-        ? task.target_minutes
-        : 25,
-    estimate_minutes,
-    dependency_mode,
-    is_blocked,
-    blocked_reason: is_blocked ? reason : null,
-    blocked_at: is_blocked ? blocked_at : null,
-    started_at: task.started_at ?? null,
-    elapsed_seconds:
-      typeof task.elapsed_seconds === 'number' && Number.isFinite(task.elapsed_seconds)
-        ? task.elapsed_seconds
-        : 0,
-  };
-}
-
 function normalizeTasks(tasks: Task[]): Task[] {
-  return tasks.map(normalizeTask);
+  return tasks.map((t) => ({
+    ...t,
+    start_date: t.start_date ?? null,
+    target_minutes:
+      typeof t.target_minutes === 'number' && Number.isFinite(t.target_minutes)
+        ? t.target_minutes
+        : 25,
+    started_at: t.started_at ?? null,
+    elapsed_seconds:
+      typeof t.elapsed_seconds === 'number' && Number.isFinite(t.elapsed_seconds)
+        ? t.elapsed_seconds
+        : 0,
+    estimate_minutes:
+      typeof t.estimate_minutes === 'number' && Number.isFinite(t.estimate_minutes)
+        ? t.estimate_minutes
+        : 25,
+    dependency_mode: t.dependency_mode === 'any' ? 'any' : 'all',
+    is_blocked: t.is_blocked === true,
+    blocked_reason: typeof t.blocked_reason === 'string' ? t.blocked_reason : null,
+    blocked_at: t.blocked_at ?? null,
+  }));
 }
 
 /** 项目级专注倒计时同样需要兜底三字段（老数据没有）。 */
