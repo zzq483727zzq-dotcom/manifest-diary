@@ -7,6 +7,8 @@ import type {
   ProjectStatus,
   ProjectSummary,
   ProjectTimeEntry,
+  DailyReviewPoint,
+  ReviewStats,
   Subtask,
   Task,
   TaskBlockers,
@@ -1185,6 +1187,190 @@ export function listTasksByDueRange(
     if (!task.due_date) return false;
     return task.due_date >= start && task.due_date <= end;
   });
+}
+
+export function getReviewStats(
+  db: ClarityDB,
+  range: { start: string; end: string },
+): ReviewStats {
+  const { start, end } = range;
+  if (start > end) return emptyReviewStats(range);
+
+  // --- daily arrays ---
+  const days: string[] = [];
+  const d = new Date(`${start}T12:00:00`);
+  const endDate = new Date(`${end}T12:00:00`);
+  while (d <= endDate) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    days.push(`${y}-${m}-${day}`);
+    d.setDate(d.getDate() + 1);
+  }
+
+  // --- task time entries ---
+  const taskEntries = db.timeEntries.filter(
+    (entry) => entry.logged_date >= start && entry.logged_date <= end,
+  );
+  const taskMinutesByDate = new Map<string, number>();
+  let taskMinutes = 0;
+  for (const entry of taskEntries) {
+    taskMinutes += entry.minutes;
+    taskMinutesByDate.set(
+      entry.logged_date,
+      (taskMinutesByDate.get(entry.logged_date) ?? 0) + entry.minutes,
+    );
+  }
+
+  // --- project time entries ---
+  const projectEntries = db.projectTimeEntries.filter(
+    (entry) => entry.logged_date >= start && entry.logged_date <= end,
+  );
+  const projectMinutesByDate = new Map<string, number>();
+  let projectMinutes = 0;
+  for (const entry of projectEntries) {
+    projectMinutes += entry.minutes;
+    projectMinutesByDate.set(
+      entry.logged_date,
+      (projectMinutesByDate.get(entry.logged_date) ?? 0) + entry.minutes,
+    );
+  }
+
+  // --- daily points (zero-filled) ---
+  const daily: DailyReviewPoint[] = days.map((date) => ({
+    date,
+    taskMinutes: taskMinutesByDate.get(date) ?? 0,
+    projectMinutes: projectMinutesByDate.get(date) ?? 0,
+    totalMinutes: (taskMinutesByDate.get(date) ?? 0) + (projectMinutesByDate.get(date) ?? 0),
+  }));
+
+  // --- completed tasks in range ---
+  const allTasks = listTasks(db);
+  const completedInRange = allTasks.filter(
+    (task) =>
+      task.status === 'completed' &&
+      task.completed_at != null &&
+      task.completed_at.slice(0, 10) >= start &&
+      task.completed_at.slice(0, 10) <= end,
+  );
+
+  const completedCount = completedInRange.length;
+
+  // --- estimate variance ---
+  let estimateMinutes = 0;
+  let actualTaskMinutes = 0;
+  for (const task of completedInRange) {
+    estimateMinutes += task.estimate_minutes;
+    // sum actual task minutes from time entries
+    const actual = db.timeEntries
+      .filter((entry) => entry.task_id === task.id && entry.logged_date >= start && entry.logged_date <= end)
+      .reduce((sum, entry) => sum + entry.minutes, 0);
+    actualTaskMinutes += actual;
+  }
+  const estimateVarianceMinutes = estimateMinutes - actualTaskMinutes;
+
+  // --- completion cycle ---
+  let totalCycleMinutes = 0;
+  for (const task of completedInRange) {
+    const created = new Date(task.created_at).getTime();
+    const completed = new Date(task.completed_at!).getTime();
+    totalCycleMinutes += Math.round((completed - created) / 60000);
+  }
+  const averageCompletionCycleMinutes = completedCount > 0
+    ? Math.round(totalCycleMinutes / completedCount)
+    : 0;
+
+  // --- overdue ---
+  const overdueTasks = allTasks.filter((task) => {
+    if (!task.due_date) return false;
+    if (task.status === 'completed' && task.completed_at) {
+      // completed after due date
+      return task.completed_at.slice(0, 10) > task.due_date;
+    }
+    // not completed: due before range end
+    return task.due_date < end && task.status !== 'completed' && task.project_status !== 'archived';
+  });
+
+  // --- blocked ---
+  const isWithinRange = (value: string | null): boolean =>
+    value != null && value.slice(0, 10) >= start && value.slice(0, 10) <= end;
+  const blockedTasks = allTasks.filter((task) => {
+    if (task.project_status === 'archived') return false;
+    const hasExternalBlock = task.is_blocked && isWithinRange(task.blocked_at);
+    if (hasExternalBlock) return true;
+
+    // A dependency contributes only from the moment that edge was created.
+    // The current completion state cannot reconstruct a removed past block.
+    return db.taskDependencies.some((dependency) => {
+      if (dependency.task_id !== task.id || !isWithinRange(dependency.created_at)) return false;
+      const dependsOn = db.tasks.find((candidate) => candidate.id === dependency.depends_on_task_id);
+      return dependsOn != null && dependsOn.status !== 'completed';
+    });
+  });
+
+  // --- bypasses ---
+  const bypasses = db.dependencyBypasses.filter((bypass) => isWithinRange(bypass.created_at));
+
+  // --- project rows ---
+  const projectRows = db.projects.map((project) => {
+    const pTaskMinutes = db.timeEntries
+      .filter((entry) => {
+        const task = db.tasks.find((t) => t.id === entry.task_id);
+        return task?.project_id === project.id && entry.logged_date >= start && entry.logged_date <= end;
+      })
+      .reduce((sum, entry) => sum + entry.minutes, 0);
+    const pProjectMinutes = db.projectTimeEntries
+      .filter((entry) => entry.project_id === project.id && entry.logged_date >= start && entry.logged_date <= end)
+      .reduce((sum, entry) => sum + entry.minutes, 0);
+    return {
+      projectId: project.id,
+      projectName: project.name,
+      color: project.color,
+      taskMinutes: pTaskMinutes,
+      projectMinutes: pProjectMinutes,
+      totalMinutes: pTaskMinutes + pProjectMinutes,
+    };
+  }).filter((row) => row.totalMinutes > 0);
+
+  return {
+    range: { start, end },
+    taskMinutes,
+    projectMinutes,
+    totalMinutes: taskMinutes + projectMinutes,
+    completedCount,
+    overdueCount: overdueTasks.length,
+    blockedCount: blockedTasks.length,
+    estimateMinutes,
+    actualTaskMinutes,
+    estimateVarianceMinutes,
+    averageCompletionCycleMinutes,
+    daily,
+    projects: projectRows,
+    overdueTasks,
+    blockedTasks,
+    bypasses,
+  };
+}
+
+function emptyReviewStats(range: { start: string; end: string }): ReviewStats {
+  return {
+    range,
+    taskMinutes: 0,
+    projectMinutes: 0,
+    totalMinutes: 0,
+    completedCount: 0,
+    overdueCount: 0,
+    blockedCount: 0,
+    estimateMinutes: 0,
+    actualTaskMinutes: 0,
+    estimateVarianceMinutes: 0,
+    averageCompletionCycleMinutes: 0,
+    daily: [],
+    projects: [],
+    overdueTasks: [],
+    blockedTasks: [],
+    bypasses: [],
+  };
 }
 
 // ---------------------------------------------------------------------------

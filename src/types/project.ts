@@ -71,12 +71,6 @@ export interface Task {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
-  // 执行复盘字段
-  estimate_minutes: number;
-  dependency_mode: DependencyMode;
-  is_blocked: boolean;
-  blocked_reason: string | null;
-  blocked_at: string | null;
 }
 
 export interface TaskDependency {
