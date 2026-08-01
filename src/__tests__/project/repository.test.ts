@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emptyDB } from '@/lib/store/store';
+import { notifyFocusCompletion } from '@/lib/project/focus-notification';
 import {
   addTaskDependency,
   canTaskStart,
@@ -217,6 +218,37 @@ describe('task dependency repository', () => {
 });
 
 describe('task focus completion', () => {
+  it('deduplicates mounted card and drawer notifications', () => {
+    expect(notifyFocusCompletion('task-1', '2026-07-31T00:00:00.000Z')).toBe(true);
+    expect(notifyFocusCompletion('task-1', '2026-07-31T00:00:00.000Z')).toBe(false);
+  });
+
+  it('finishes zero-time focus without creating a fake minute entry', () => {
+    const { db, taskA } = dependencyFixture();
+    startTaskFocus(db, taskA.id);
+    finishTaskFocus(db, taskA.id, '倒计时完成');
+    expect(getTaskEntity(db, taskA.id)).toMatchObject({
+      status: 'completed', started_at: null, elapsed_seconds: 0,
+    });
+    expect(db.timeEntries.filter((entry) => entry.task_id === taskA.id)).toEqual([]);
+  });
+
+  it('removes existing edges after imported task project changes', () => {
+    const { db, taskA, taskB, otherTask } = dependencyFixture();
+    addTaskDependency(db, taskB.id, taskA.id);
+    importBackup(db, {
+      version: 1,
+      exported_at: '2026-07-31T00:00:00.000Z',
+      projects: [],
+      tasks: [{ ...otherTask, id: taskB.id, title: taskB.title }],
+      subtasks: [],
+      timeEntries: [],
+      taskDependencies: [],
+      dependencyBypasses: [],
+    });
+    expect(listTaskDependencies(db, taskB.id)).toEqual([]);
+  });
+
   it('records focused time when a focused task is completed', () => {
     const db = emptyDB();
     const project = createProject(db, {

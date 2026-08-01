@@ -1,4 +1,11 @@
-export function notifyFocusCompletion() {
+const notifiedCompletions = new Set<string>();
+
+export function notifyFocusCompletion(taskId?: string, startedAt?: string | null): boolean {
+  if (taskId && startedAt) {
+    const key = `${taskId}:${startedAt}`;
+    if (notifiedCompletions.has(key)) return false;
+    notifiedCompletions.add(key);
+  }
   try {
     const w = window as unknown as {
       AudioContext?: typeof AudioContext;
@@ -29,4 +36,5 @@ export function notifyFocusCompletion() {
   } catch {
     // Browser notifications are optional.
   }
+  return true;
 }

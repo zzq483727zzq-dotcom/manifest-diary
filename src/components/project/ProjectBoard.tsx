@@ -941,7 +941,7 @@ function CardCountdownChip({
   useEffect(() => {
     if (!task.started_at || remaining > 0 || finishedRef.current) return;
     finishedRef.current = true;
-    notifyFocusCompletion();
+    notifyFocusCompletion(task.id, task.started_at);
     mutate((draft) => {
       finishTaskFocus(draft, task.id);
     });

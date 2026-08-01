@@ -65,7 +65,7 @@ export function CountdownTimer({
     if (finishedRef.current) return;
     finishedRef.current = true;
     try {
-      notifyFocusCompletion();
+      notifyFocusCompletion(task.id, task.started_at);
       // 自动落账 + 计时归零，状态不变
       mutate((draft) => {
         finishTaskFocus(draft, task.id, '倒计时完成');

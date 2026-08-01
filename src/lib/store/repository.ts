@@ -957,9 +957,8 @@ export function stopTimer(
   if (project?.status === 'archived') throw new Error('已归档项目不能记录耗时');
 
   const elapsed = taskElapsedSeconds(task);
-  const hadFocus = Boolean(task.started_at) || task.elapsed_seconds > 0;
   const at = nowIso();
-  const minutes = hadFocus ? Math.max(1, Math.ceil(elapsed / 60)) : 0;
+  const minutes = elapsed > 0 ? Math.max(1, Math.ceil(elapsed / 60)) : 0;
   task.started_at = null;
   task.elapsed_seconds = 0;
   task.updated_at = at;
@@ -1525,9 +1524,22 @@ function importBackupIntoDB(
     importedProjectTimeEntries += 1;
   }
 
+  // Task imports can change project ownership of existing tasks. Revalidate the
+  // complete staged graph after all task merges, not just new edges.
+  db.taskDependencies = db.taskDependencies.filter((dependency) => {
+    const task = db.tasks.find((item) => item.id === dependency.task_id);
+    const prerequisite = db.tasks.find((item) => item.id === dependency.depends_on_task_id);
+    return task != null && prerequisite != null && task.project_id === prerequisite.project_id;
+  });
+  const validDependencyIds = new Set(db.taskDependencies.map((dependency) => dependency.id));
+  db.dependencyBypasses = db.dependencyBypasses.filter((bypass) =>
+    db.tasks.some((task) => task.id === bypass.task_id) &&
+    bypass.dependency_ids.every((dependencyId) => validDependencyIds.has(dependencyId)),
+  );
+
   const importedDependencies = normalizeTaskDependencies(payload.taskDependencies);
-  const importedBypasses = normalizeDependencyBypasses(payload.dependencyBypasses);
   const acceptedDependencies = validImportedDependencies(db, importedDependencies);
+  const importedBypasses = normalizeDependencyBypasses(payload.dependencyBypasses);
   const acceptedBypasses = validImportedBypasses(db, importedBypasses, acceptedDependencies);
 
   for (const dependency of acceptedDependencies) {
