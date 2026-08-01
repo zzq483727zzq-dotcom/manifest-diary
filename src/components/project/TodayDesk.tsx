@@ -1,13 +1,25 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ProjectSummary, TaskWithMeta } from '@/types/project';
 import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from '@/types/project';
-import { formatMinutes } from '@/lib/project/date';
+import {
+  endOfMonth,
+  endOfWeek,
+  formatMinutes,
+  localDateString,
+  startOfMonth,
+  startOfWeek,
+} from '@/lib/project/date';
 import type { TodayGroups, WeekStats } from '@/types/project';
-import { mutate } from '@/lib/store/useStore';
-import { updateTask } from '@/lib/store/repository';
+import { mutate, useStore } from '@/lib/store/useStore';
+import { getReviewStats, updateTask } from '@/lib/store/repository';
+import { ReviewRangePicker, type ReviewRangePreset } from '@/components/dashboard/ReviewRangePicker';
+import { ReviewSummary } from '@/components/dashboard/ReviewSummary';
+import { ReviewDetails } from '@/components/dashboard/ReviewDetails';
+
+const REVIEW_RANGE_STORAGE_KEY = 'clarity-review-range';
 
 const GROUPS: Array<{
   key: keyof TodayGroups;
@@ -26,6 +38,16 @@ function dateLine(d = new Date()) {
   return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · 周${week}`;
 }
 
+function rangeForPreset(preset: ReviewRangePreset, today: string) {
+  const current = new Date(`${today}T12:00:00`);
+  if (preset === 'today') return { start: today, end: today };
+  if (preset === 'week') return { start: startOfWeek(today), end: endOfWeek(today) };
+  return {
+    start: startOfMonth(current.getFullYear(), current.getMonth() + 1),
+    end: endOfMonth(current.getFullYear(), current.getMonth() + 1),
+  };
+}
+
 export function TodayDesk({
   groups,
   stats,
@@ -35,14 +57,59 @@ export function TodayDesk({
   stats: WeekStats;
   projects: ProjectSummary[];
 }) {
+  const db = useStore();
+  const today = localDateString();
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
+  const [reviewPreset, setReviewPreset] = useState<ReviewRangePreset>('week');
+  const [reviewRange, setReviewRange] = useState(() => rangeForPreset('week', today));
+  const [reviewRangeLoaded, setReviewRangeLoaded] = useState(false);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(REVIEW_RANGE_STORAGE_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as {
+          preset?: ReviewRangePreset;
+          start?: string;
+          end?: string;
+        };
+        if (
+          (parsed.preset === 'today' || parsed.preset === 'week' || parsed.preset === 'month' || parsed.preset === 'custom') &&
+          typeof parsed.start === 'string' &&
+          typeof parsed.end === 'string' &&
+          parsed.start <= parsed.end
+        ) {
+          setReviewPreset(parsed.preset);
+          setReviewRange({ start: parsed.start, end: parsed.end });
+        }
+      } catch {
+        window.localStorage.removeItem(REVIEW_RANGE_STORAGE_KEY);
+      }
+    }
+    setReviewRangeLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!reviewRangeLoaded) return;
+    window.localStorage.setItem(
+      REVIEW_RANGE_STORAGE_KEY,
+      JSON.stringify({ preset: reviewPreset, ...reviewRange }),
+    );
+  }, [reviewPreset, reviewRange, reviewRangeLoaded]);
+
+  const reviewStats = useMemo(() => getReviewStats(db, reviewRange), [db, reviewRange]);
+
+  function selectReviewPreset(preset: ReviewRangePreset) {
+    setReviewPreset(preset);
+    if (preset !== 'custom') setReviewRange(rangeForPreset(preset, today));
+  }
 
   function completeTask(task: TaskWithMeta) {
     if (busyTaskId) return;
     setBusyTaskId(task.id);
     try {
-      mutate((db) => {
-        updateTask(db, task.id, {
+      mutate((draft) => {
+        updateTask(draft, task.id, {
           title: task.title,
           description: task.description,
           status: task.status === 'completed' ? 'todo' : 'completed',
@@ -61,8 +128,7 @@ export function TodayDesk({
   const overdueN = groups.overdue.length;
   const dueN = groups.dueToday.length;
   const urgent = overdueN + dueN;
-  const total =
-    urgent + groups.highSoon.length + groups.inProgress.length;
+  const total = urgent + groups.highSoon.length + groups.inProgress.length;
 
   const lead =
     projects.length === 0
@@ -100,10 +166,10 @@ export function TodayDesk({
       </header>
 
       <section className="td-stats" aria-label="本周概览">
-        {metrics.map((m, i) => (
-          <span className="td-stat" key={m.label}>
-            <span className="td-stat-value">{m.value}</span>
-            <span className="td-stat-label">{m.label}</span>
+        {metrics.map((metric) => (
+          <span className="td-stat" key={metric.label}>
+            <span className="td-stat-value">{metric.value}</span>
+            <span className="td-stat-label">{metric.label}</span>
           </span>
         ))}
       </section>
@@ -129,32 +195,32 @@ export function TodayDesk({
           <section className="td-board" aria-label="今日行动分组">
             <p className="td-board-note">按紧急程度自上而下，先清顶部一组再往下。</p>
             <div className="td-board-grid">
-              {GROUPS.map((g) => {
-                const items = groups[g.key];
+              {GROUPS.map((group) => {
+                const items = groups[group.key];
                 const visible = items.slice(0, 5);
-                const urgentPanel = g.tone === 'danger' && items.length > 0;
+                const urgentPanel = group.tone === 'danger' && items.length > 0;
                 return (
                   <section
-                    key={g.key}
-                    className={`td-panel tone-${g.tone}${urgentPanel ? ' is-hot' : ''}`}
+                    key={group.key}
+                    className={`td-panel tone-${group.tone}${urgentPanel ? ' is-hot' : ''}`}
                   >
                     <header className="td-panel-h">
                       <h2>
-                        <i className={`td-pip tone-${g.tone}`} aria-hidden />
-                        {g.title}
+                        <i className={`td-pip tone-${group.tone}`} aria-hidden />
+                        {group.title}
                       </h2>
                       <span className="td-count">{items.length}</span>
                     </header>
 
                     {visible.length === 0 ? (
-                      <p className="td-panel-empty">{g.empty}</p>
+                      <p className="td-panel-empty">{group.empty}</p>
                     ) : (
                       <ul className="td-list">
                         {visible.map((task) => (
                           <li key={task.id}>
                             <TaskRow
                               task={task}
-                              hot={g.key === 'overdue'}
+                              hot={group.key === 'overdue'}
                               busy={busyTaskId === task.id}
                               onComplete={() => completeTask(task)}
                             />
@@ -182,20 +248,20 @@ export function TodayDesk({
               </Link>
             </header>
             <div className="td-proj-grid">
-              {projects.slice(0, 4).map((p) => (
-                <Link key={p.id} href={`/projects/detail?id=${p.id}`} className="td-proj">
+              {projects.slice(0, 4).map((project) => (
+                <Link key={project.id} href={`/projects/detail?id=${project.id}`} className="td-proj">
                   <div className="td-proj-top">
-                    <span className="td-swatch" style={{ background: p.color }} aria-hidden />
-                    <strong>{p.name}</strong>
-                    <em>{Math.round(p.progress * 100)}%</em>
+                    <span className="td-swatch" style={{ background: project.color }} aria-hidden />
+                    <strong>{project.name}</strong>
+                    <em>{Math.round(project.progress * 100)}%</em>
                   </div>
                   <p>
-                    {p.task_completed}/{p.task_total} 已完成
-                    {p.nearest_due_date ? ` · 最近 ${p.nearest_due_date}` : ''}
-                    {p.minutes_total > 0 ? ` · ${formatMinutes(p.minutes_total)}` : ''}
+                    {project.task_completed}/{project.task_total} 已完成
+                    {project.nearest_due_date ? ` · 最近 ${project.nearest_due_date}` : ''}
+                    {project.minutes_total > 0 ? ` · ${formatMinutes(project.minutes_total)}` : ''}
                   </p>
                   <div className="td-bar" aria-hidden>
-                    <div style={{ width: `${Math.round(p.progress * 100)}%` }} />
+                    <div style={{ width: `${Math.round(project.progress * 100)}%` }} />
                   </div>
                 </Link>
               ))}
@@ -203,6 +269,26 @@ export function TodayDesk({
           </section>
         </>
       )}
+
+      <section className="td-review" aria-label="执行复盘">
+        <header className="td-sec-h review-heading">
+          <div>
+            <h2>执行复盘</h2>
+            <p>{reviewStats.range.start} 至 {reviewStats.range.end}</p>
+          </div>
+          <ReviewRangePicker
+            preset={reviewPreset}
+            value={reviewRange}
+            onPresetChange={selectReviewPreset}
+            onRangeChange={(range) => {
+              setReviewPreset('custom');
+              setReviewRange(range.start <= range.end ? range : { start: range.end, end: range.end });
+            }}
+          />
+        </header>
+        <ReviewSummary stats={reviewStats} />
+        <ReviewDetails stats={reviewStats} />
+      </section>
     </div>
   );
 }
