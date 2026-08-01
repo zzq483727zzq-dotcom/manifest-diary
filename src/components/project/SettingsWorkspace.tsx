@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useStore, replaceDB } from '@/lib/store/useStore';
-import { emptyDB } from '@/lib/store/store';
+import { cloneDB } from '@/lib/store/store';
 import {
   exportBackup,
   importBackup as importBackupRepo,
@@ -73,9 +73,9 @@ export function SettingsWorkspace() {
     setBackupError('');
     setBackupMsg('');
     try {
-      const fresh = emptyDB();
-      const counts = importBackupRepo(fresh, importPayload as Parameters<typeof importBackupRepo>[1]);
-      replaceDB(fresh);
+      const merged = cloneDB(db);
+      const counts = importBackupRepo(merged, importPayload as Parameters<typeof importBackupRepo>[1]);
+      replaceDB(merged);
       setBackupMsg(
         `导入完成：项目 ${counts.projects} / 任务 ${counts.tasks} / 子任务 ${counts.subtasks} / 耗时 ${counts.timeEntries} / 项目耗时 ${counts.projectTimeEntries}`,
       );

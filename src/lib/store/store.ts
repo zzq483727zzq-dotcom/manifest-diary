@@ -3,6 +3,8 @@ import type {
   ProjectTimeEntry,
   Subtask,
   Task,
+  TaskDependency,
+  DependencyBypass,
   TimeEntry,
 } from '@/types/project';
 
@@ -19,6 +21,8 @@ export interface ClarityDB {
   subtasks: Subtask[];
   timeEntries: TimeEntry[];
   projectTimeEntries: ProjectTimeEntry[];
+  taskDependencies: TaskDependency[];
+  dependencyBypasses: DependencyBypass[];
 }
 
 const STORAGE_KEY = 'clarity-db';
@@ -31,6 +35,8 @@ export function emptyDB(): ClarityDB {
     subtasks: [],
     timeEntries: [],
     projectTimeEntries: [],
+    taskDependencies: [],
+    dependencyBypasses: [],
   };
 }
 
@@ -59,6 +65,12 @@ export function loadDB(): ClarityDB {
       timeEntries: Array.isArray(parsed.timeEntries) ? parsed.timeEntries : [],
       projectTimeEntries: Array.isArray(parsed.projectTimeEntries)
         ? parsed.projectTimeEntries
+        : [],
+      taskDependencies: Array.isArray(parsed.taskDependencies)
+        ? parsed.taskDependencies
+        : [],
+      dependencyBypasses: Array.isArray(parsed.dependencyBypasses)
+        ? parsed.dependencyBypasses
         : [],
     };
   } catch {
@@ -124,6 +136,14 @@ function normalizeTasks(tasks: Task[]): Task[] {
       typeof t.elapsed_seconds === 'number' && Number.isFinite(t.elapsed_seconds)
         ? t.elapsed_seconds
         : 0,
+    estimate_minutes:
+      typeof t.estimate_minutes === 'number' && Number.isFinite(t.estimate_minutes)
+        ? t.estimate_minutes
+        : 25,
+    dependency_mode: t.dependency_mode === 'any' ? 'any' : 'all',
+    is_blocked: t.is_blocked === true,
+    blocked_reason: typeof t.blocked_reason === 'string' ? t.blocked_reason : null,
+    blocked_at: t.blocked_at ?? null,
   }));
 }
 

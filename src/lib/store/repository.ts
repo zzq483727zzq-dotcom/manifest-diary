@@ -1,12 +1,19 @@
+import { localDateString } from '@/lib/project/date';
 import type {
   BackupPayload,
+  DependencyBypass,
+  DependencyMode,
   Project,
   ProjectColor,
   ProjectStatus,
   ProjectSummary,
   ProjectTimeEntry,
+  DailyReviewPoint,
+  ReviewStats,
   Subtask,
   Task,
+  TaskBlockers,
+  TaskDependency,
   TaskPriority,
   TaskStatus,
   TaskWithMeta,
@@ -14,7 +21,7 @@ import type {
   TodayGroups,
   WeekStats,
 } from '@/types/project';
-export type { BackupPayload, TodayGroups, WeekStats };
+export type { BackupPayload, TaskBlockers, TodayGroups, WeekStats };
 import type {
   ProjectInput,
   ProjectTimeEntryInput,
@@ -276,6 +283,14 @@ export function createTask(db: ClarityDB, input: TaskInput): TaskWithMeta {
     created_at: at,
     updated_at: at,
     completed_at: input.status === 'completed' ? at : null,
+    estimate_minutes:
+      typeof input.estimate_minutes === 'number' && Number.isFinite(input.estimate_minutes)
+        ? input.estimate_minutes
+        : 25,
+    dependency_mode: input.dependency_mode === 'any' ? 'any' : 'all',
+    is_blocked: false,
+    blocked_reason: null,
+    blocked_at: null,
   };
   db.tasks.push(task);
   touchProject(db, input.project_id, at);
@@ -339,6 +354,12 @@ export function deleteTask(db: ClarityDB, id: string) {
   const at = nowIso();
   db.timeEntries = db.timeEntries.filter((entry) => entry.task_id !== id);
   db.subtasks = db.subtasks.filter((sub) => sub.task_id !== id);
+  // 清理依赖关系：删除以该任务为任意端点的边
+  db.taskDependencies = db.taskDependencies.filter(
+    (dep) => dep.task_id !== id && dep.depends_on_task_id !== id,
+  );
+  // 清理绕过记录
+  db.dependencyBypasses = db.dependencyBypasses.filter((b) => b.task_id !== id);
   db.tasks = db.tasks.filter((task) => task.id !== id);
   touchProject(db, existing.project_id, at);
 }
@@ -368,6 +389,181 @@ export function moveTaskPosition(
   b.updated_at = at;
   touchProject(db, task.project_id, at);
   return getTask(db, taskId)!;
+}
+
+// ---------------------------------------------------------------------------
+// Task dependencies
+// ---------------------------------------------------------------------------
+
+export function listTaskDependencies(db: ClarityDB, taskId: string): TaskDependency[] {
+  return db.taskDependencies.filter((dep) => dep.task_id === taskId);
+}
+
+export function addTaskDependency(
+  db: ClarityDB,
+  taskId: string,
+  dependsOnTaskId: string,
+): TaskDependency {
+  const task = getTaskEntity(db, taskId);
+  if (!task) throw new Error('任务不存在');
+  const dependsOn = getTaskEntity(db, dependsOnTaskId);
+  if (!dependsOn) throw new Error('依赖任务不存在');
+  if (taskId === dependsOnTaskId) throw new Error('不能依赖自己');
+  if (task.project_id !== dependsOn.project_id) throw new Error('只能依赖同一项目');
+  if (db.taskDependencies.some(
+    (dep) => dep.task_id === taskId && dep.depends_on_task_id === dependsOnTaskId,
+  )) {
+    throw new Error('依赖关系已存在');
+  }
+
+  // DFS cycle detection: check if dependsOnTaskId can reach taskId through existing edges
+  const visited = new Set<string>();
+  function dfs(currentId: string): boolean {
+    if (currentId === taskId) return true;
+    if (visited.has(currentId)) return false;
+    visited.add(currentId);
+    const outgoing = db.taskDependencies.filter((dep) => dep.task_id === currentId);
+    for (const dep of outgoing) {
+      if (dfs(dep.depends_on_task_id)) return true;
+    }
+    return false;
+  }
+  if (dfs(dependsOnTaskId)) throw new Error('不能形成循环依赖');
+
+  const at = nowIso();
+  const dep: TaskDependency = {
+    id: uuid(),
+    task_id: taskId,
+    depends_on_task_id: dependsOnTaskId,
+    created_at: at,
+  };
+  db.taskDependencies.push(dep);
+  touchProject(db, task.project_id, at);
+  return dep;
+}
+
+export function removeTaskDependency(db: ClarityDB, dependencyId: string): void {
+  const index = db.taskDependencies.findIndex((dep) => dep.id === dependencyId);
+  if (index < 0) throw new Error('依赖关系不存在');
+  const dep = db.taskDependencies[index];
+  const task = getTaskEntity(db, dep.task_id);
+  db.taskDependencies.splice(index, 1);
+  if (task) touchProject(db, task.project_id, nowIso());
+}
+
+// ---------------------------------------------------------------------------
+// Task blockers and readiness
+// ---------------------------------------------------------------------------
+
+export function getTaskBlockers(db: ClarityDB, taskId: string): TaskBlockers {
+  const task = getTaskEntity(db, taskId);
+  if (!task) throw new Error('任务不存在');
+
+  const deps = listTaskDependencies(db, taskId);
+  const dependencyIds = deps.map((dep) => dep.depends_on_task_id);
+  const unfinishedDependencyIds = dependencyIds.filter((depId) => {
+    const depTask = getTaskEntity(db, depId);
+    return !depTask || depTask.status !== 'completed';
+  });
+
+  const labels: string[] = [];
+  if (task.dependency_mode === 'all') {
+    // All dependencies must be completed
+    if (unfinishedDependencyIds.length > 0) {
+      labels.push(`${unfinishedDependencyIds.length} 个依赖未完成`);
+    }
+  } else {
+    // Any mode: at least one must be completed
+    if (dependencyIds.length > 0 && unfinishedDependencyIds.length === dependencyIds.length) {
+      labels.push('没有依赖已完成');
+    }
+  }
+
+  if (task.is_blocked && task.blocked_reason) {
+    labels.push(`外部阻塞: ${task.blocked_reason}`);
+  }
+
+  // Determine readiness
+  let ready = true;
+  const depReady = task.dependency_mode === 'all'
+    ? unfinishedDependencyIds.length === 0
+    : dependencyIds.length === 0 || unfinishedDependencyIds.length < dependencyIds.length;
+  if (!depReady) ready = false;
+  if (task.is_blocked) ready = false;
+
+  return {
+    ready,
+    dependencyIds,
+    unfinishedDependencyIds,
+    externalReason: task.is_blocked ? task.blocked_reason : null,
+    labels,
+  };
+}
+
+export function canTaskStart(db: ClarityDB, taskId: string): TaskBlockers {
+  return getTaskBlockers(db, taskId);
+}
+
+// ---------------------------------------------------------------------------
+// External blocking
+// ---------------------------------------------------------------------------
+
+export function setTaskBlocked(db: ClarityDB, taskId: string, reason: string): void {
+  const task = getTaskEntity(db, taskId);
+  if (!task) throw new Error('任务不存在');
+  const trimmed = reason.trim();
+  if (trimmed.length < 1) throw new Error('阻塞原因不能为空');
+  if (trimmed.length > 200) throw new Error('阻塞原因不能超过 200 个字符');
+  const at = nowIso();
+  task.is_blocked = true;
+  task.blocked_reason = trimmed;
+  task.blocked_at = at;
+  task.updated_at = at;
+  touchProject(db, task.project_id, at);
+}
+
+export function clearTaskBlocked(db: ClarityDB, taskId: string): void {
+  const task = getTaskEntity(db, taskId);
+  if (!task) throw new Error('任务不存在');
+  const at = nowIso();
+  task.is_blocked = false;
+  task.blocked_reason = null;
+  task.updated_at = at;
+  touchProject(db, task.project_id, at);
+}
+
+// ---------------------------------------------------------------------------
+// Dependency bypasses
+// ---------------------------------------------------------------------------
+
+export function listDependencyBypasses(db: ClarityDB, taskId: string): DependencyBypass[] {
+  return db.dependencyBypasses
+    .filter((b) => b.task_id === taskId)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+export function recordDependencyBypass(
+  db: ClarityDB,
+  taskId: string,
+  dependencyIds: string[],
+  reason: string,
+): DependencyBypass {
+  const task = getTaskEntity(db, taskId);
+  if (!task) throw new Error('任务不存在');
+  const trimmed = reason.trim();
+  if (trimmed.length < 1) throw new Error('绕过原因不能为空');
+  if (trimmed.length > 200) throw new Error('绕过原因不能超过 200 个字符');
+  const at = nowIso();
+  const bypass: DependencyBypass = {
+    id: uuid(),
+    task_id: taskId,
+    dependency_ids: dependencyIds,
+    reason: trimmed,
+    created_at: at,
+  };
+  db.dependencyBypasses.push(bypass);
+  touchProject(db, task.project_id, at);
+  return bypass;
 }
 
 // ---------------------------------------------------------------------------
@@ -653,6 +849,72 @@ export function setTargetMinutes(db: ClarityDB, taskId: string, minutes: number)
 }
 
 // ---------------------------------------------------------------------------
+// Task focus state transitions
+// ---------------------------------------------------------------------------
+
+/**
+ * 开始任务专注：检查阻塞/依赖条件，记录绕过，启动计时，状态切为 in_progress。
+ * 这是所有 UI 开始专注的统一入口。options.bypass=true 时跳过阻塞检查。
+ */
+export function startTaskFocus(
+  db: ClarityDB,
+  taskId: string,
+  options: { bypass?: boolean; reason?: string } = {},
+): void {
+  const task = getTaskEntity(db, taskId);
+  if (!task) throw new Error('任务不存在');
+  if (task.status === 'completed') throw new Error('已完成的任务不能开始专注');
+  const project = getProject(db, task.project_id);
+  if (project?.status === 'archived') throw new Error('已归档项目不能开始专注');
+
+  const blockers = getTaskBlockers(db, taskId);
+  if (!blockers.ready) {
+    if (!options.bypass) {
+      if (blockers.externalReason) {
+        throw new Error('任务当前被阻塞');
+      }
+      if (blockers.unfinishedDependencyIds.length > 0) {
+        throw new Error('依赖未完成');
+      }
+      throw new Error('任务当前不能开始');
+    }
+    // Record bypass
+    const bypassReason = options.reason?.trim() || '跳过限制';
+    recordDependencyBypass(db, taskId, blockers.unfinishedDependencyIds, bypassReason);
+  }
+
+  // Use the existing startTimer logic
+  startTimer(db, taskId);
+}
+
+/**
+ * 结束任务专注：保存专注时间，任务标记为完成。
+ * 这是所有 UI 提前结束/倒计时完成的统一入口。
+ * 零专注时间时仍清除运行状态但不创建耗时记录。
+ */
+export function finishTaskFocus(
+  db: ClarityDB,
+  taskId: string,
+  note?: string,
+): TimeEntry | null {
+  const task = getTaskEntity(db, taskId);
+  if (!task) throw new Error('任务不存在');
+
+  const hadFocus = Boolean(task.started_at) || task.elapsed_seconds > 0;
+  const entry = stopTimer(db, taskId, { note: note ?? '提前结束' });
+
+  const at = nowIso();
+  task.status = 'completed';
+  task.completed_at = at;
+  task.updated_at = at;
+  task.position = nextTaskPosition(db, task.project_id, 'completed');
+  touchProject(db, task.project_id, at);
+
+  if (!hadFocus) return null;
+  return entry;
+}
+
+// ---------------------------------------------------------------------------
 // Project-level countdown timer (一个项目整计时，与任务级同构)
 // ---------------------------------------------------------------------------
 
@@ -900,8 +1162,8 @@ export function getWeekStats(db: ClarityDB, today: string): WeekStats {
     (task) =>
       task.status === 'completed' &&
       task.completed_at != null &&
-      task.completed_at.slice(0, 10) >= start &&
-      task.completed_at.slice(0, 10) <= today,
+      localDateString(new Date(task.completed_at)) >= start &&
+      localDateString(new Date(task.completed_at)) <= today,
   ).length;
   const stillOpen = db.tasks.filter(
     (task) => !archivedProjects.has(task.project_id) && task.status !== 'completed',
@@ -927,6 +1189,180 @@ export function listTasksByDueRange(
   });
 }
 
+export function getReviewStats(
+  db: ClarityDB,
+  range: { start: string; end: string },
+): ReviewStats {
+  const { start, end } =
+    range.start <= range.end
+      ? range
+      : { start: range.end, end: range.start };
+
+  // --- daily arrays ---
+  const days: string[] = [];
+  const d = new Date(`${start}T12:00:00`);
+  const endDate = new Date(`${end}T12:00:00`);
+  while (d <= endDate) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    days.push(`${y}-${m}-${day}`);
+    d.setDate(d.getDate() + 1);
+  }
+
+  // --- task time entries ---
+  const taskEntries = db.timeEntries.filter(
+    (entry) => entry.logged_date >= start && entry.logged_date <= end,
+  );
+  const taskMinutesByDate = new Map<string, number>();
+  let taskMinutes = 0;
+  for (const entry of taskEntries) {
+    taskMinutes += entry.minutes;
+    taskMinutesByDate.set(
+      entry.logged_date,
+      (taskMinutesByDate.get(entry.logged_date) ?? 0) + entry.minutes,
+    );
+  }
+
+  // --- project time entries ---
+  const projectEntries = db.projectTimeEntries.filter(
+    (entry) => entry.logged_date >= start && entry.logged_date <= end,
+  );
+  const projectMinutesByDate = new Map<string, number>();
+  let projectMinutes = 0;
+  for (const entry of projectEntries) {
+    projectMinutes += entry.minutes;
+    projectMinutesByDate.set(
+      entry.logged_date,
+      (projectMinutesByDate.get(entry.logged_date) ?? 0) + entry.minutes,
+    );
+  }
+
+  // --- daily points (zero-filled) ---
+  const daily: DailyReviewPoint[] = days.map((date) => ({
+    date,
+    taskMinutes: taskMinutesByDate.get(date) ?? 0,
+    projectMinutes: projectMinutesByDate.get(date) ?? 0,
+    totalMinutes: (taskMinutesByDate.get(date) ?? 0) + (projectMinutesByDate.get(date) ?? 0),
+  }));
+
+  // --- completed tasks in range ---
+  const allTasks = listTasks(db);
+  const completedInRange = allTasks.filter(
+    (task) =>
+      task.status === 'completed' &&
+      task.completed_at != null &&
+      localDateString(new Date(task.completed_at)) >= start &&
+      localDateString(new Date(task.completed_at)) <= end,
+  );
+
+  const completedCount = completedInRange.length;
+
+  // --- estimate variance ---
+  let estimateMinutes = 0;
+  let actualTaskMinutes = 0;
+  for (const task of completedInRange) {
+    estimateMinutes += task.estimate_minutes;
+    // sum actual task minutes from time entries
+    const actual = db.timeEntries
+      .filter((entry) => entry.task_id === task.id)
+      .reduce((sum, entry) => sum + entry.minutes, 0);
+    actualTaskMinutes += actual;
+  }
+  const estimateVarianceMinutes = estimateMinutes - actualTaskMinutes;
+
+  // --- completion cycle ---
+  let totalCycleMinutes = 0;
+  for (const task of completedInRange) {
+    const created = new Date(task.created_at).getTime();
+    const completed = new Date(task.completed_at!).getTime();
+    totalCycleMinutes += Math.round((completed - created) / 60000);
+  }
+  const averageCompletionCycleMinutes = completedCount > 0
+    ? Math.round(totalCycleMinutes / completedCount)
+    : 0;
+
+  // --- overdue ---
+  const overdueTasks = allTasks.filter((task) => {
+    if (!task.due_date) return false;
+    if (task.status === 'completed' && task.completed_at) {
+      const completedDate = localDateString(new Date(task.completed_at));
+      return completedDate >= start && completedDate <= end && task.due_date < completedDate;
+    }
+    return task.status !== 'completed' &&
+      task.project_status !== 'archived' &&
+      task.due_date >= start &&
+      task.due_date <= end;
+  });
+
+  // --- blocked ---
+  const isWithinRange = (value: string | null): boolean => {
+    if (value == null) return false;
+    const date = localDateString(new Date(value));
+    return date >= start && date <= end;
+  };
+  const blockedTasks = allTasks.filter((task) => {
+    if (task.project_status === 'archived') return false;
+    const hasExternalBlock = isWithinRange(task.blocked_at);
+    if (hasExternalBlock) return true;
+
+    const dependencies = db.taskDependencies.filter((dependency) => dependency.task_id === task.id);
+    if (!dependencies.some((dependency) => isWithinRange(dependency.created_at))) return false;
+
+    const unfinishedDependencies = dependencies.filter((dependency) => {
+      const dependsOn = db.tasks.find((candidate) => candidate.id === dependency.depends_on_task_id);
+      return dependsOn != null && dependsOn.status !== 'completed';
+    });
+
+    return task.dependency_mode === 'all'
+      ? unfinishedDependencies.length > 0
+      : unfinishedDependencies.length === dependencies.length;
+  });
+
+  // --- bypasses ---
+  const bypasses = db.dependencyBypasses.filter((bypass) => isWithinRange(bypass.created_at));
+
+  // --- project rows ---
+  const projectRows = db.projects.map((project) => {
+    const pTaskMinutes = db.timeEntries
+      .filter((entry) => {
+        const task = db.tasks.find((t) => t.id === entry.task_id);
+        return task?.project_id === project.id && entry.logged_date >= start && entry.logged_date <= end;
+      })
+      .reduce((sum, entry) => sum + entry.minutes, 0);
+    const pProjectMinutes = db.projectTimeEntries
+      .filter((entry) => entry.project_id === project.id && entry.logged_date >= start && entry.logged_date <= end)
+      .reduce((sum, entry) => sum + entry.minutes, 0);
+    return {
+      projectId: project.id,
+      projectName: project.name,
+      color: project.color,
+      taskMinutes: pTaskMinutes,
+      projectMinutes: pProjectMinutes,
+      totalMinutes: pTaskMinutes + pProjectMinutes,
+    };
+  }).filter((row) => row.totalMinutes > 0);
+
+  return {
+    range: { start, end },
+    taskMinutes,
+    projectMinutes,
+    totalMinutes: taskMinutes + projectMinutes,
+    completedCount,
+    overdueCount: overdueTasks.length,
+    blockedCount: blockedTasks.length,
+    estimateMinutes,
+    actualTaskMinutes,
+    estimateVarianceMinutes,
+    averageCompletionCycleMinutes,
+    daily,
+    projects: projectRows,
+    overdueTasks,
+    blockedTasks,
+    bypasses,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Backup export / import (acts on the in-memory DB, not localStorage)
 // ---------------------------------------------------------------------------
@@ -942,6 +1378,8 @@ export function exportBackup(db: ClarityDB): BackupPayload {
     subtasks: byCreated(db.subtasks),
     timeEntries: byCreated(db.timeEntries),
     projectTimeEntries: byCreated(db.projectTimeEntries),
+    taskDependencies: byCreated(db.taskDependencies),
+    dependencyBypasses: byCreated(db.dependencyBypasses),
   };
 }
 
@@ -954,6 +1392,8 @@ export function importBackup(
   subtasks: number;
   timeEntries: number;
   projectTimeEntries: number;
+  taskDependencies: number;
+  dependencyBypasses: number;
 } {
   if (!payload || payload.version !== 1) throw new Error('备份格式不支持');
   if (!Array.isArray(payload.projects) || !Array.isArray(payload.tasks)) {
@@ -1011,6 +1451,14 @@ export function importBackup(
       created_at: task.created_at,
       updated_at: task.updated_at,
       completed_at: task.completed_at,
+      estimate_minutes:
+        typeof task.estimate_minutes === 'number' && Number.isFinite(task.estimate_minutes)
+          ? task.estimate_minutes
+          : 25,
+      dependency_mode: task.dependency_mode === 'any' ? 'any' : 'all',
+      is_blocked: task.is_blocked === true,
+      blocked_reason: typeof task.blocked_reason === 'string' ? task.blocked_reason : null,
+      blocked_at: task.blocked_at ?? null,
     };
     if (existing) Object.assign(existing, record);
     else db.tasks.push(record);
@@ -1061,12 +1509,26 @@ export function importBackup(
     else db.projectTimeEntries.push(record);
   }
 
+  for (const dep of payload.taskDependencies ?? []) {
+    const existing = db.taskDependencies.find((item) => item.id === dep.id);
+    if (existing) Object.assign(existing, dep);
+    else db.taskDependencies.push(dep);
+  }
+
+  for (const bypass of payload.dependencyBypasses ?? []) {
+    const existing = db.dependencyBypasses.find((item) => item.id === bypass.id);
+    if (existing) Object.assign(existing, bypass);
+    else db.dependencyBypasses.push(bypass);
+  }
+
   return {
     projects: payload.projects.length,
     tasks: (payload.tasks ?? []).length,
     subtasks: (payload.subtasks ?? []).length,
     timeEntries: (payload.timeEntries ?? []).length,
     projectTimeEntries: (payload.projectTimeEntries ?? []).length,
+    taskDependencies: (payload.taskDependencies ?? []).length,
+    dependencyBypasses: (payload.dependencyBypasses ?? []).length,
   };
 }
 

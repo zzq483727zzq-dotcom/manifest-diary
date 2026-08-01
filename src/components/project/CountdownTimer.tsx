@@ -4,15 +4,15 @@ import { useEffect, useRef, useState } from 'react';
 import type { Task } from '@/types/project';
 import { mutate } from '@/lib/store/useStore';
 import {
-  finishTimer,
+  finishTaskFocus,
   pauseTimer,
   setTargetMinutes,
-  startTimer,
-  stopTimer,
+  startTaskFocus,
   taskElapsedSeconds,
   taskRemainingSeconds,
 } from '@/lib/store/repository';
 import { useCountdown } from '@/hooks/useCountdown';
+import { notifyFocusCompletion } from '@/lib/project/focus-notification';
 
 function padTwo(n: number) {
   return String(n).padStart(2, '0');
@@ -32,7 +32,15 @@ function fmtSec(total: number) {
  * 到 0 响铃 + 自动把这段时间写为一条耗时记录（finishTimer），不改任务状态。
  * 专注时长用 started_at + elapsed_seconds 实时算，刷新页面/关页不丢秒。
  */
-export function CountdownTimer({ task, readOnly }: { task: Task; readOnly?: boolean }) {
+export function CountdownTimer({
+  task,
+  readOnly,
+  onBlockedStart,
+}: {
+  task: Task;
+  readOnly?: boolean;
+  onBlockedStart?: (task: Task) => { bypass: boolean; reason?: string } | null;
+}) {
   const remaining = useCountdown(task, taskRemainingSeconds);
   const running = Boolean(task.started_at);
   const completed = task.status === 'completed';
@@ -57,11 +65,10 @@ export function CountdownTimer({ task, readOnly }: { task: Task; readOnly?: bool
     if (finishedRef.current) return;
     finishedRef.current = true;
     try {
-      // 响铃
-      chime();
+      notifyFocusCompletion(task.id, task.started_at);
       // 自动落账 + 计时归零，状态不变
       mutate((draft) => {
-        finishTimer(draft, task.id);
+        finishTaskFocus(draft, task.id, '倒计时完成');
       });
     } catch {
       // 落账失败也不反复触发（闸已关）
@@ -114,9 +121,9 @@ export function CountdownTimer({ task, readOnly }: { task: Task; readOnly?: bool
             type="button"
             className="primary-button"
             onClick={() => {
-              // 继续/开始：若有累计 elapsed 且没超过目标，按 started_at 重新起算；
-              // 若已到 0（上一轮完成且 elapsed 已被 finish 清零），直接开始新一轮。
-              mutate((d) => startTimer(d, task.id));
+              const bypass = onBlockedStart?.(task);
+              if (bypass === null) return;
+              mutate((d) => startTaskFocus(d, task.id, bypass ?? undefined));
             }}
           >
             {hasRun ? '继续' : '开始'}
@@ -130,7 +137,7 @@ export function CountdownTimer({ task, readOnly }: { task: Task; readOnly?: bool
             if (!hasRun || !window.confirm('提前结束并完成这个任务吗？已专注时间会保存。')) return;
             try {
               mutate((d) => {
-                finishTimer(d, task.id);
+                finishTaskFocus(d, task.id);
               });
             } catch {
               // silent
@@ -139,57 +146,7 @@ export function CountdownTimer({ task, readOnly }: { task: Task; readOnly?: bool
         >
           提前结束
         </button>
-        <button
-          type="button"
-          className="pb-ghost"
-          disabled={!hasRun}
-          onClick={() => {
-            if (!hasRun) return;
-            if (!window.confirm('停止并保存这段专注时间吗？')) return;
-            try {
-              mutate((d) => { stopTimer(d, task.id); });
-            } catch {
-              // silent
-            }
-          }}
-        >
-          停止并保存
-        </button>
       </div>
     </div>
   );
-}
-
-/** 到点提示音 + 浏览器通知。 */
-function chime() {
-  try {
-    const w = window as unknown as {
-      AudioContext?: typeof AudioContext;
-      webkitAudioContext?: typeof AudioContext;
-    };
-    const AC = w.AudioContext ?? w.webkitAudioContext;
-    if (AC) {
-      const ctx = new AC();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.001, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.7);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.75);
-      osc.onended = () => ctx.close().catch(() => {});
-    }
-  } catch {
-    // Web Audio 不可用就静默
-  }
-  try {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-      new Notification('倒计时完成', { body: '这段时间已记入耗时，可以休息一下。' });
-    }
-  } catch {
-    // silent
-  }
 }

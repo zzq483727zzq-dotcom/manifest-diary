@@ -1876,6 +1876,299 @@ body {
   line-height: 1.55;
 }
 
+/* Execution review stays beneath the action desk as one operating column. */
+.td-review {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--life-line);
+}
+
+.review-heading {
+  align-items: flex-start;
+}
+
+.review-heading p {
+  margin: 5px 0 0;
+  color: var(--life-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.review-range-picker {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.review-range-presets {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--life-line);
+  border-radius: 8px;
+  background: var(--life-raised);
+}
+
+.review-range-preset {
+  border: 0;
+  border-radius: 5px;
+  padding: 6px 9px;
+  background: transparent;
+  color: var(--life-muted);
+  cursor: pointer;
+  font: 600 12px/1.3 inherit;
+}
+
+.review-range-preset:hover,
+.review-range-preset.active {
+  background: var(--life-accent-soft);
+  color: var(--life-accent-deep);
+}
+
+.review-range-preset:focus-visible,
+.review-details-toggle:focus-visible,
+.review-custom-dates input:focus-visible {
+  outline: 2px solid rgba(15, 118, 110, 0.45);
+  outline-offset: 2px;
+}
+
+.review-custom-dates {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+
+.review-custom-dates label {
+  display: grid;
+  gap: 4px;
+  color: var(--life-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.review-custom-dates input {
+  min-width: 136px;
+  border: 1px solid var(--life-line);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: var(--life-raised);
+  color: var(--life-ink);
+  font: 500 12px/1.25 inherit;
+}
+
+.review-date-separator {
+  padding-bottom: 7px;
+  color: var(--life-muted);
+  font-size: 12px;
+}
+
+.review-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  border-top: 1px solid var(--life-line);
+  border-left: 1px solid var(--life-line);
+  background: var(--life-raised);
+}
+
+.review-metric {
+  min-width: 0;
+  padding: 13px 14px;
+  border-right: 1px solid var(--life-line);
+  border-bottom: 1px solid var(--life-line);
+}
+
+.review-metric span,
+.review-metric strong {
+  display: block;
+}
+
+.review-metric span {
+  color: var(--life-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.review-metric strong {
+  margin-top: 7px;
+  overflow-wrap: anywhere;
+  color: var(--life-ink);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+
+.review-details {
+  margin-top: 14px;
+  border-top: 1px solid var(--life-line);
+}
+
+.review-details-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border: 0;
+  background: transparent;
+  color: var(--life-ink);
+  cursor: pointer;
+  font: 700 13px/1.3 inherit;
+  text-align: left;
+}
+
+.review-details-toggle span:last-child {
+  color: var(--life-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.review-details-content {
+  padding: 2px 0 0;
+}
+
+.review-detail-highlights {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.review-detail-highlights > div {
+  padding: 13px 14px;
+  border: 1px solid var(--life-line);
+  border-radius: 8px;
+  background: var(--life-raised);
+}
+
+.review-detail-highlights span,
+.review-detail-highlights strong,
+.review-detail-highlights small {
+  display: block;
+}
+
+.review-detail-highlights span,
+.review-detail-highlights small {
+  color: var(--life-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.review-detail-highlights strong {
+  margin: 6px 0 4px;
+  color: var(--life-ink);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.review-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.review-detail-list {
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid var(--life-line);
+  border-radius: 8px;
+  background: var(--life-raised);
+}
+
+.review-detail-list h3 {
+  margin: 0;
+  color: var(--life-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.review-detail-list p,
+.review-detail-list ul {
+  margin: 9px 0 0;
+  padding: 0;
+  color: var(--life-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.review-detail-list ul {
+  list-style: none;
+}
+
+.review-detail-list li + li {
+  margin-top: 9px;
+}
+
+.review-detail-list li strong,
+.review-detail-list li span {
+  display: block;
+}
+
+.review-detail-list li strong {
+  overflow: hidden;
+  color: var(--life-ink);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-detail-list li span {
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+  color: var(--life-muted);
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .review-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .review-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .review-heading {
+    display: grid;
+    gap: 12px;
+  }
+
+  .review-range-picker {
+    justify-items: start;
+  }
+
+  .review-range-presets {
+    justify-content: flex-start;
+  }
+
+  .review-custom-dates {
+    width: 100%;
+    align-items: end;
+  }
+
+  .review-custom-dates label {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .review-custom-dates input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .review-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .review-detail-highlights {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ===== Project board — Cool Fog Desk / Operate, pb-* scoped surface =====
    Fog-soft columns hold white task cards; restrained teal is the only accent.
    Vocabulary mirrors the Today desk (td-*) so the two workbench surfaces
