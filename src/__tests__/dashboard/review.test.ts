@@ -104,6 +104,34 @@ describe('review statistics', () => {
     expect(result.daily[2]).toEqual({ date: '2026-07-29', taskMinutes: 0, projectMinutes: 0, totalMinutes: 0 });
   });
 
+  it('normalizes reversed ranges before aggregating review statistics', () => {
+    const { db, project, taskA } = fixtureDb();
+    db.timeEntries.push({
+      id: 'te1',
+      task_id: taskA.id,
+      minutes: 20,
+      logged_date: '2026-07-27',
+      note: '',
+      created_at: '2026-07-27T10:00:00Z',
+      updated_at: '2026-07-27T10:00:00Z',
+    });
+    db.projectTimeEntries.push({
+      id: 'pte1',
+      project_id: project.id,
+      minutes: 30,
+      logged_date: '2026-07-28',
+      note: '',
+      created_at: '2026-07-28T10:00:00Z',
+      updated_at: '2026-07-28T10:00:00Z',
+    });
+
+    const forward = getReviewStats(db, { start: '2026-07-27', end: '2026-07-29' });
+    const reversed = getReviewStats(db, { start: '2026-07-29', end: '2026-07-27' });
+
+    expect(reversed).toEqual(forward);
+    expect(reversed.range).toEqual({ start: '2026-07-27', end: '2026-07-29' });
+  });
+
   it('computes estimate variance and completion cycle', () => {
     const { db, taskA, taskB } = fixtureDb();
 

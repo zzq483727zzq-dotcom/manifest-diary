@@ -1193,8 +1193,10 @@ export function getReviewStats(
   db: ClarityDB,
   range: { start: string; end: string },
 ): ReviewStats {
-  const { start, end } = range;
-  if (start > end) return emptyReviewStats(range);
+  const { start, end } =
+    range.start <= range.end
+      ? range
+      : { start: range.end, end: range.start };
 
   // --- daily arrays ---
   const days: string[] = [];
@@ -1349,27 +1351,6 @@ export function getReviewStats(
     overdueTasks,
     blockedTasks,
     bypasses,
-  };
-}
-
-function emptyReviewStats(range: { start: string; end: string }): ReviewStats {
-  return {
-    range,
-    taskMinutes: 0,
-    projectMinutes: 0,
-    totalMinutes: 0,
-    completedCount: 0,
-    overdueCount: 0,
-    blockedCount: 0,
-    estimateMinutes: 0,
-    actualTaskMinutes: 0,
-    estimateVarianceMinutes: 0,
-    averageCompletionCycleMinutes: 0,
-    daily: [],
-    projects: [],
-    overdueTasks: [],
-    blockedTasks: [],
-    bypasses: [],
   };
 }
 
