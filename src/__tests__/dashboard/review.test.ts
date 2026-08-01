@@ -9,6 +9,7 @@ import {
   getReviewStats,
   addTaskDependency,
   setTaskBlocked,
+  clearTaskBlocked,
   recordDependencyBypass,
   finishTaskFocus,
   startTaskFocus,
@@ -137,6 +138,7 @@ describe('review statistics', () => {
 
     // taskA: estimate 60min, actual 45min → variance -15
     db.timeEntries.push(
+      { id: 'te0', task_id: taskA.id, minutes: 15, logged_date: '2026-07-26', note: '', created_at: '2026-07-26T10:00:00Z', updated_at: '2026-07-26T10:00:00Z' },
       { id: 'te1', task_id: taskA.id, minutes: 45, logged_date: '2026-07-28', note: '', created_at: '2026-07-28T10:00:00Z', updated_at: '2026-07-28T10:00:00Z' },
     );
 
@@ -151,11 +153,62 @@ describe('review statistics', () => {
 
     const result = getReviewStats(db, { start: '2026-07-27', end: '2026-08-02' });
     expect(result.estimateMinutes).toBe(60); // only taskA's estimate (completed)
-    expect(result.actualTaskMinutes).toBe(45); // only taskA's actual
-    expect(result.estimateVarianceMinutes).toBe(15); // 60 - 45 = 15 (overestimated)
+    expect(result.actualTaskMinutes).toBe(60); // all taskA time supports its total estimate
+    expect(result.estimateVarianceMinutes).toBe(0); // 60 - 60
     expect(result.completedCount).toBe(1);
     // 3 days 30 min = 3*24*60 + 30 = 4350 min
     expect(result.averageCompletionCycleMinutes).toBe(4350);
+  });
+
+  it('uses local calendar dates for ISO timestamp evidence', () => {
+    const { db, taskA } = fixtureDb();
+    const task = db.tasks.find((candidate) => candidate.id === taskA.id)!;
+    task.due_date = '2026-07-27';
+    task.status = 'completed';
+    task.completed_at = '2026-07-27T23:30:00-02:00';
+
+    const result = getReviewStats(db, { start: '2026-07-28', end: '2026-07-28' });
+
+    expect(result.completedCount).toBe(1);
+    expect(result.overdueTasks.map((item) => item.id)).toEqual([taskA.id]);
+  });
+
+  it('scopes overdue tasks to their evidence within the selected range', () => {
+    const { db, taskA, taskB, taskC } = fixtureDb();
+
+    const openInRange = db.tasks.find((task) => task.id === taskA.id)!;
+    openInRange.due_date = '2026-07-27';
+
+    const openBeforeRange = db.tasks.find((task) => task.id === taskB.id)!;
+    openBeforeRange.due_date = '2026-07-26';
+
+    const completedLateInRange = db.tasks.find((task) => task.id === taskC.id)!;
+    completedLateInRange.due_date = '2026-07-27';
+    completedLateInRange.status = 'completed';
+    completedLateInRange.completed_at = '2026-07-28T10:00:00Z';
+
+    const completedLateBeforeRange = createTask(db, {
+      project_id: db.projects[0].id,
+      title: '范围外完成的逾期任务',
+      description: '',
+      status: 'completed',
+      priority: 'medium',
+      due_date: '2026-07-20',
+      start_date: null,
+      target_minutes: 25,
+      estimate_minutes: 30,
+    });
+    db.tasks.find((task) => task.id === completedLateBeforeRange.id)!.completed_at = '2026-07-26T10:00:00Z';
+
+    const result = getReviewStats(db, { start: '2026-07-27', end: '2026-07-29' });
+
+    expect(result.overdueTasks.map((task) => task.id)).toEqual(
+      expect.arrayContaining([taskA.id, taskC.id]),
+    );
+    expect(result.overdueTasks.map((task) => task.id)).not.toEqual(
+      expect.arrayContaining([taskB.id, completedLateBeforeRange.id]),
+    );
+    expect(result.overdueCount).toBe(2);
   });
 
   it('counts overdue tasks', () => {
@@ -168,12 +221,12 @@ describe('review statistics', () => {
     // taskB: completed after its deadline → overdue
     db.tasks.find((t) => t.id === taskB.id)!.due_date = '2026-07-20';
     db.tasks.find((t) => t.id === taskB.id)!.status = 'completed';
-    db.tasks.find((t) => t.id === taskB.id)!.completed_at = '2026-07-21T10:00:00Z';
+    db.tasks.find((t) => t.id === taskB.id)!.completed_at = '2026-07-28T10:00:00Z';
 
     const result = getReviewStats(db, { start: '2026-07-27', end: '2026-08-02' });
-    expect(result.overdueCount).toBe(2);
-    expect(result.overdueTasks).toHaveLength(2);
-    expect(result.overdueTasks.map((task) => task.id)).toEqual(expect.arrayContaining([taskA.id, taskB.id]));
+    expect(result.overdueCount).toBe(1);
+    expect(result.overdueTasks).toHaveLength(1);
+    expect(result.overdueTasks.map((task) => task.id)).toEqual([taskB.id]);
   });
 
   it('counts only blockers evidenced within the selected range', () => {
@@ -181,6 +234,7 @@ describe('review statistics', () => {
 
     setTaskBlocked(db, taskA.id, '等待反馈');
     db.tasks.find((task) => task.id === taskA.id)!.blocked_at = '2026-07-28T09:00:00Z';
+    clearTaskBlocked(db, taskA.id);
 
     setTaskBlocked(db, taskB.id, '未来阻塞');
     db.tasks.find((task) => task.id === taskB.id)!.blocked_at = '2026-08-03T09:00:00Z';
@@ -192,6 +246,37 @@ describe('review statistics', () => {
     expect(result.blockedCount).toBe(2);
     expect(result.blockedTasks.map((task) => task.id)).toEqual(expect.arrayContaining([taskA.id, taskC.id]));
     expect(result.blockedTasks.map((task) => task.id)).not.toContain(taskB.id);
+  });
+
+  it('respects dependency mode when counting range-scoped blockers', () => {
+    const { db, taskA, taskB, taskC } = fixtureDb();
+
+    const allMode = addTaskDependency(db, taskC.id, taskA.id);
+    allMode.created_at = '2026-07-28T09:00:00Z';
+
+    const anyModeTask = createTask(db, {
+      project_id: db.projects[0].id,
+      title: '任一依赖即可继续',
+      description: '',
+      status: 'todo',
+      priority: 'medium',
+      due_date: null,
+      start_date: null,
+      target_minutes: 25,
+      estimate_minutes: 30,
+      dependency_mode: 'any',
+    });
+    const anyModeA = addTaskDependency(db, anyModeTask.id, taskA.id);
+    anyModeA.created_at = '2026-07-28T09:00:00Z';
+    const anyModeB = addTaskDependency(db, anyModeTask.id, taskB.id);
+    anyModeB.created_at = '2026-07-28T09:00:00Z';
+
+    db.tasks.find((task) => task.id === taskB.id)!.status = 'completed';
+
+    const result = getReviewStats(db, { start: '2026-07-27', end: '2026-07-29' });
+
+    expect(result.blockedTasks.map((task) => task.id)).toContain(taskC.id);
+    expect(result.blockedTasks.map((task) => task.id)).not.toContain(anyModeTask.id);
   });
 
   it('includes only bypasses recorded in the selected range', () => {

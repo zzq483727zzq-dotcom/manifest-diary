@@ -224,7 +224,7 @@ describe('external blocking', () => {
     clearTaskBlocked(db, taskA.id);
     expect(entity.is_blocked).toBe(false);
     expect(entity.blocked_reason).toBeNull();
-    expect(entity.blocked_at).toBeNull();
+    expect(entity.blocked_at).toBeTruthy();
   });
 
   it('validates blocked reason length', () => {

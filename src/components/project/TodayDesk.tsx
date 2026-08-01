@@ -6,7 +6,6 @@ import type { ProjectSummary, TaskWithMeta } from '@/types/project';
 import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from '@/types/project';
 import {
   endOfMonth,
-  endOfWeek,
   formatMinutes,
   localDateString,
   startOfMonth,
@@ -41,11 +40,21 @@ function dateLine(d = new Date()) {
 function rangeForPreset(preset: ReviewRangePreset, today: string) {
   const current = new Date(`${today}T12:00:00`);
   if (preset === 'today') return { start: today, end: today };
-  if (preset === 'week') return { start: startOfWeek(today), end: endOfWeek(today) };
+  if (preset === 'week') return { start: startOfWeek(today), end: today };
   return {
     start: startOfMonth(current.getFullYear(), current.getMonth() + 1),
     end: endOfMonth(current.getFullYear(), current.getMonth() + 1),
   };
+}
+
+function isReviewPreset(value: unknown): value is ReviewRangePreset {
+  return value === 'today' || value === 'week' || value === 'month' || value === 'custom';
+}
+
+function isLocalDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T12:00:00`);
+  return !Number.isNaN(date.getTime()) && localDateString(date) === value;
 }
 
 export function TodayDesk({
@@ -66,22 +75,32 @@ export function TodayDesk({
 
   useEffect(() => {
     const stored = window.localStorage.getItem(REVIEW_RANGE_STORAGE_KEY);
-    if (stored) {
+    if (stored != null) {
       try {
-        const parsed = JSON.parse(stored) as {
-          preset?: ReviewRangePreset;
-          start?: string;
-          end?: string;
-        };
-        if (
-          (parsed.preset === 'today' || parsed.preset === 'week' || parsed.preset === 'month' || parsed.preset === 'custom') &&
-          typeof parsed.start === 'string' &&
-          typeof parsed.end === 'string' &&
-          parsed.start <= parsed.end
-        ) {
-          setReviewPreset(parsed.preset);
-          setReviewRange({ start: parsed.start, end: parsed.end });
+        const parsed: unknown = JSON.parse(stored);
+        if (typeof parsed !== 'object' || parsed == null || Array.isArray(parsed)) {
+          throw new Error('Invalid review range storage');
         }
+
+        const { preset, start, end } = parsed as {
+          preset?: unknown;
+          start?: unknown;
+          end?: unknown;
+        };
+        if (!isReviewPreset(preset)) throw new Error('Invalid review preset');
+
+        if (preset === 'custom') {
+          if (!isLocalDate(start) || !isLocalDate(end) || start > end) {
+            throw new Error('Invalid custom review range');
+          }
+          setReviewRange({ start, end });
+        } else {
+          if (start != null || end != null) {
+            window.localStorage.removeItem(REVIEW_RANGE_STORAGE_KEY);
+          }
+          setReviewRange(rangeForPreset(preset, localDateString()));
+        }
+        setReviewPreset(preset);
       } catch {
         window.localStorage.removeItem(REVIEW_RANGE_STORAGE_KEY);
       }
@@ -91,10 +110,10 @@ export function TodayDesk({
 
   useEffect(() => {
     if (!reviewRangeLoaded) return;
-    window.localStorage.setItem(
-      REVIEW_RANGE_STORAGE_KEY,
-      JSON.stringify({ preset: reviewPreset, ...reviewRange }),
-    );
+    const storedRange = reviewPreset === 'custom'
+      ? { preset: reviewPreset, ...reviewRange }
+      : { preset: reviewPreset };
+    window.localStorage.setItem(REVIEW_RANGE_STORAGE_KEY, JSON.stringify(storedRange));
   }, [reviewPreset, reviewRange, reviewRangeLoaded]);
 
   const reviewStats = useMemo(() => getReviewStats(db, reviewRange), [db, reviewRange]);

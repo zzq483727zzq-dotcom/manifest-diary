@@ -21,7 +21,10 @@ describe('TodayDesk execution review', () => {
     expect(markup).toContain('aria-label="执行复盘"');
     expect(markup).toContain('aria-pressed="true"');
     expect(markup).toContain('本周');
+    expect(markup).toContain('2026-07-27 至 2026-08-01');
     expect(markup).toContain('任务专注');
     expect(markup).toContain('项目整体专注');
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).not.toContain('id="review-details-content"');
   });
 });

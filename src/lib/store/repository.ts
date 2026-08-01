@@ -1,3 +1,4 @@
+import { localDateString } from '@/lib/project/date';
 import type {
   BackupPayload,
   DependencyBypass,
@@ -527,7 +528,6 @@ export function clearTaskBlocked(db: ClarityDB, taskId: string): void {
   const at = nowIso();
   task.is_blocked = false;
   task.blocked_reason = null;
-  task.blocked_at = null;
   task.updated_at = at;
   touchProject(db, task.project_id, at);
 }
@@ -1162,8 +1162,8 @@ export function getWeekStats(db: ClarityDB, today: string): WeekStats {
     (task) =>
       task.status === 'completed' &&
       task.completed_at != null &&
-      task.completed_at.slice(0, 10) >= start &&
-      task.completed_at.slice(0, 10) <= today,
+      localDateString(new Date(task.completed_at)) >= start &&
+      localDateString(new Date(task.completed_at)) <= today,
   ).length;
   const stillOpen = db.tasks.filter(
     (task) => !archivedProjects.has(task.project_id) && task.status !== 'completed',
@@ -1252,8 +1252,8 @@ export function getReviewStats(
     (task) =>
       task.status === 'completed' &&
       task.completed_at != null &&
-      task.completed_at.slice(0, 10) >= start &&
-      task.completed_at.slice(0, 10) <= end,
+      localDateString(new Date(task.completed_at)) >= start &&
+      localDateString(new Date(task.completed_at)) <= end,
   );
 
   const completedCount = completedInRange.length;
@@ -1265,7 +1265,7 @@ export function getReviewStats(
     estimateMinutes += task.estimate_minutes;
     // sum actual task minutes from time entries
     const actual = db.timeEntries
-      .filter((entry) => entry.task_id === task.id && entry.logged_date >= start && entry.logged_date <= end)
+      .filter((entry) => entry.task_id === task.id)
       .reduce((sum, entry) => sum + entry.minutes, 0);
     actualTaskMinutes += actual;
   }
@@ -1286,28 +1286,37 @@ export function getReviewStats(
   const overdueTasks = allTasks.filter((task) => {
     if (!task.due_date) return false;
     if (task.status === 'completed' && task.completed_at) {
-      // completed after due date
-      return task.completed_at.slice(0, 10) > task.due_date;
+      const completedDate = localDateString(new Date(task.completed_at));
+      return completedDate >= start && completedDate <= end && task.due_date < completedDate;
     }
-    // not completed: due before range end
-    return task.due_date < end && task.status !== 'completed' && task.project_status !== 'archived';
+    return task.status !== 'completed' &&
+      task.project_status !== 'archived' &&
+      task.due_date >= start &&
+      task.due_date <= end;
   });
 
   // --- blocked ---
-  const isWithinRange = (value: string | null): boolean =>
-    value != null && value.slice(0, 10) >= start && value.slice(0, 10) <= end;
+  const isWithinRange = (value: string | null): boolean => {
+    if (value == null) return false;
+    const date = localDateString(new Date(value));
+    return date >= start && date <= end;
+  };
   const blockedTasks = allTasks.filter((task) => {
     if (task.project_status === 'archived') return false;
-    const hasExternalBlock = task.is_blocked && isWithinRange(task.blocked_at);
+    const hasExternalBlock = isWithinRange(task.blocked_at);
     if (hasExternalBlock) return true;
 
-    // A dependency contributes only from the moment that edge was created.
-    // The current completion state cannot reconstruct a removed past block.
-    return db.taskDependencies.some((dependency) => {
-      if (dependency.task_id !== task.id || !isWithinRange(dependency.created_at)) return false;
+    const dependencies = db.taskDependencies.filter((dependency) => dependency.task_id === task.id);
+    if (!dependencies.some((dependency) => isWithinRange(dependency.created_at))) return false;
+
+    const unfinishedDependencies = dependencies.filter((dependency) => {
       const dependsOn = db.tasks.find((candidate) => candidate.id === dependency.depends_on_task_id);
       return dependsOn != null && dependsOn.status !== 'completed';
     });
+
+    return task.dependency_mode === 'all'
+      ? unfinishedDependencies.length > 0
+      : unfinishedDependencies.length === dependencies.length;
   });
 
   // --- bypasses ---

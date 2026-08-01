@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { formatMinutes } from '@/lib/project/date';
 import type { ReviewStats, TaskWithMeta } from '@/types/project';
 
 const STORAGE_KEY = 'clarity-review-details-open';
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 function detailLabel(task: TaskWithMeta) {
   return `${task.project_name} · ${task.title}`;
@@ -39,17 +40,18 @@ function ListSection({
 }
 
 export function ReviewDetails({ stats }: { stats: ReviewStats }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
     setOpen(saved == null ? !window.matchMedia('(max-width: 767px)').matches : saved === 'true');
     setInitialized(true);
   }, []);
 
   useEffect(() => {
-    if (initialized) window.localStorage.setItem(STORAGE_KEY, String(open));
+    if (!initialized) return;
+    window.localStorage.setItem(STORAGE_KEY, String(open));
   }, [initialized, open]);
 
   const variance = stats.estimateVarianceMinutes;
