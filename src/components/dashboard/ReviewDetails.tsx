@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { formatMinutes } from '@/lib/project/date';
+import { safeStorageGetItem, safeStorageSetItem } from '@/lib/browser/safeStorage';
 import type { ReviewStats, TaskWithMeta } from '@/types/project';
 
 const STORAGE_KEY = 'clarity-review-details-open';
@@ -44,14 +45,14 @@ export function ReviewDetails({ stats }: { stats: ReviewStats }) {
   const [initialized, setInitialized] = useState(false);
 
   useIsomorphicLayoutEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
+    const saved = safeStorageGetItem(STORAGE_KEY);
     setOpen(saved == null ? !window.matchMedia('(max-width: 767px)').matches : saved === 'true');
     setInitialized(true);
   }, []);
 
   useEffect(() => {
     if (!initialized) return;
-    window.localStorage.setItem(STORAGE_KEY, String(open));
+    safeStorageSetItem(STORAGE_KEY, String(open));
   }, [initialized, open]);
 
   const variance = stats.estimateVarianceMinutes;

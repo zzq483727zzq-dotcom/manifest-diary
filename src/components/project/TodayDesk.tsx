@@ -14,6 +14,11 @@ import {
 import type { TodayGroups, WeekStats } from '@/types/project';
 import { mutate, useStore } from '@/lib/store/useStore';
 import { getReviewStats, updateTask } from '@/lib/store/repository';
+import {
+  safeStorageGetItem,
+  safeStorageRemoveItem,
+  safeStorageSetItem,
+} from '@/lib/browser/safeStorage';
 import { ReviewRangePicker, type ReviewRangePreset } from '@/components/dashboard/ReviewRangePicker';
 import { ReviewSummary } from '@/components/dashboard/ReviewSummary';
 import { ReviewDetails } from '@/components/dashboard/ReviewDetails';
@@ -32,12 +37,16 @@ const GROUPS: Array<{
   { key: 'inProgress', title: '进行中', empty: '还没有进行中的任务。', tone: 'neutral' },
 ];
 
-function dateLine(d = new Date()) {
+function dateLine(d: Date) {
   const week = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
   return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · 周${week}`;
 }
 
-function rangeForPreset(preset: ReviewRangePreset, today: string) {
+export function getReviewRangeForPreset(
+  preset: Exclude<ReviewRangePreset, 'custom'>,
+  now = new Date(),
+) {
+  const today = localDateString(now);
   const current = new Date(`${today}T12:00:00`);
   if (preset === 'today') return { start: today, end: today };
   if (preset === 'week') return { start: startOfWeek(today), end: today };
@@ -67,14 +76,16 @@ export function TodayDesk({
   projects: ProjectSummary[];
 }) {
   const db = useStore();
-  const today = localDateString();
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
+  const [todayLabel, setTodayLabel] = useState<string | null>(null);
   const [reviewPreset, setReviewPreset] = useState<ReviewRangePreset>('week');
-  const [reviewRange, setReviewRange] = useState(() => rangeForPreset('week', today));
+  const [reviewRange, setReviewRange] = useState<{ start: string; end: string } | null>(null);
   const [reviewRangeLoaded, setReviewRangeLoaded] = useState(false);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(REVIEW_RANGE_STORAGE_KEY);
+    setTodayLabel(dateLine(new Date()));
+
+    const stored = safeStorageGetItem(REVIEW_RANGE_STORAGE_KEY);
     if (stored != null) {
       try {
         const parsed: unknown = JSON.parse(stored);
@@ -96,31 +107,37 @@ export function TodayDesk({
           setReviewRange({ start, end });
         } else {
           if (start != null || end != null) {
-            window.localStorage.removeItem(REVIEW_RANGE_STORAGE_KEY);
+            safeStorageRemoveItem(REVIEW_RANGE_STORAGE_KEY);
           }
-          setReviewRange(rangeForPreset(preset, localDateString()));
+          setReviewRange(getReviewRangeForPreset(preset));
         }
         setReviewPreset(preset);
       } catch {
-        window.localStorage.removeItem(REVIEW_RANGE_STORAGE_KEY);
+        safeStorageRemoveItem(REVIEW_RANGE_STORAGE_KEY);
+        setReviewRange(getReviewRangeForPreset('week'));
       }
+    } else {
+      setReviewRange(getReviewRangeForPreset('week'));
     }
     setReviewRangeLoaded(true);
   }, []);
 
   useEffect(() => {
-    if (!reviewRangeLoaded) return;
+    if (!reviewRangeLoaded || !reviewRange) return;
     const storedRange = reviewPreset === 'custom'
       ? { preset: reviewPreset, ...reviewRange }
       : { preset: reviewPreset };
-    window.localStorage.setItem(REVIEW_RANGE_STORAGE_KEY, JSON.stringify(storedRange));
+    safeStorageSetItem(REVIEW_RANGE_STORAGE_KEY, JSON.stringify(storedRange));
   }, [reviewPreset, reviewRange, reviewRangeLoaded]);
 
-  const reviewStats = useMemo(() => getReviewStats(db, reviewRange), [db, reviewRange]);
+  const reviewStats = useMemo(
+    () => reviewRange == null ? null : getReviewStats(db, reviewRange),
+    [db, reviewRange],
+  );
 
   function selectReviewPreset(preset: ReviewRangePreset) {
     setReviewPreset(preset);
-    if (preset !== 'custom') setReviewRange(rangeForPreset(preset, today));
+    if (preset !== 'custom') setReviewRange(getReviewRangeForPreset(preset));
   }
 
   function completeTask(task: TaskWithMeta) {
@@ -168,7 +185,7 @@ export function TodayDesk({
   return (
     <div className="td">
       <header className="td-hero">
-        <p className="td-date">{dateLine()}</p>
+        <p className="td-date">{todayLabel ?? '今日行动'}</p>
         <div className="td-hero-row">
           <div className="td-hero-text">
             <h1>今天先推进最重要的事</h1>
@@ -289,25 +306,27 @@ export function TodayDesk({
         </>
       )}
 
-      <section className="td-review" aria-label="执行复盘">
-        <header className="td-sec-h review-heading">
-          <div>
-            <h2>执行复盘</h2>
-            <p>{reviewStats.range.start} 至 {reviewStats.range.end}</p>
-          </div>
-          <ReviewRangePicker
-            preset={reviewPreset}
-            value={reviewRange}
-            onPresetChange={selectReviewPreset}
-            onRangeChange={(range) => {
-              setReviewPreset('custom');
-              setReviewRange(range.start <= range.end ? range : { start: range.end, end: range.end });
-            }}
-          />
-        </header>
-        <ReviewSummary stats={reviewStats} />
-        <ReviewDetails stats={reviewStats} />
-      </section>
+      {reviewRange != null && reviewStats != null ? (
+        <section className="td-review" aria-label="执行复盘">
+          <header className="td-sec-h review-heading">
+            <div>
+              <h2>执行复盘</h2>
+              <p>{reviewStats.range.start} 至 {reviewStats.range.end}</p>
+            </div>
+            <ReviewRangePicker
+              preset={reviewPreset}
+              value={reviewRange}
+              onPresetChange={selectReviewPreset}
+              onRangeChange={(range) => {
+                setReviewPreset('custom');
+                setReviewRange(range.start <= range.end ? range : { start: range.end, end: range.end });
+              }}
+            />
+          </header>
+          <ReviewSummary stats={reviewStats} />
+          <ReviewDetails stats={reviewStats} />
+        </section>
+      ) : null}
     </div>
   );
 }
