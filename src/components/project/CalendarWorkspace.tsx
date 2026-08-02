@@ -3,9 +3,13 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { TaskWithMeta } from '@/types/project';
+import type { ProjectSummary, TaskWithMeta } from '@/types/project';
+import type { TaskInput } from '@/lib/project/validation';
 import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from '@/types/project';
 import { addDays, endOfMonth, endOfWeek, localDateString, startOfMonth, startOfWeek } from '@/lib/project/date';
+import { mutate } from '@/lib/store/useStore';
+import { createTask } from '@/lib/store/repository';
+import { parseTaskInput } from '@/lib/project/validation';
 
 type ViewMode = 'month' | 'week';
 type FilterMode = 'all' | 'open';
@@ -36,6 +40,7 @@ function buildWeekCells(anchor: string) {
 
 export function CalendarWorkspace({
   tasks,
+  projects,
   initialYear,
   initialMonth,
   initialView,
@@ -43,6 +48,7 @@ export function CalendarWorkspace({
   initialSelected,
 }: {
   tasks: TaskWithMeta[];
+  projects: ProjectSummary[];
   initialYear: number;
   initialMonth: number;
   initialView: ViewMode;
@@ -57,6 +63,52 @@ export function CalendarWorkspace({
   const [filter, setFilter] = useState<FilterMode>(initialFilter);
   const [selected, setSelected] = useState(initialSelected || today);
   const [weekAnchor, setWeekAnchor] = useState(initialSelected || today);
+
+  // 日面板内联建任务表单：预填截止日期为选中日。
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newTaskProjectId, setNewTaskProjectId] = useState('');
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskDueDate, setNewTaskDueDate] = useState('');
+  const [createError, setCreateError] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  function openCreateForm() {
+    setNewTaskProjectId(projects[0]?.id ?? '');
+    setNewTaskTitle('');
+    setNewTaskDueDate(selected);
+    setCreateError('');
+    setCreateOpen(true);
+  }
+
+  function submitCreateTask(event: React.FormEvent) {
+    event.preventDefault();
+    if (!newTaskProjectId) {
+      setCreateError('请选择项目');
+      return;
+    }
+    setCreating(true);
+    setCreateError('');
+    try {
+      const input = parseTaskInput({
+        project_id: newTaskProjectId,
+        title: newTaskTitle,
+        description: '',
+        priority: 'medium',
+        target_minutes: 25,
+        due_date: newTaskDueDate || null,
+        start_date: null,
+      }) as TaskInput;
+      mutate((draft) => {
+        createTask(draft, input);
+      });
+      setCreateOpen(false);
+      setNewTaskTitle('');
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : '创建失败');
+    } finally {
+      setCreating(false);
+    }
+  }
 
   const filtered = useMemo(() => {
     return tasks.filter((task) => {
@@ -289,7 +341,51 @@ export function CalendarWorkspace({
             <span className="day-panel-sub muted">
               {selectedTasks.length > 0 ? `当日截止 ${selectedTasks.length} 项` : '当日截止任务'}
             </span>
+            {projects.length > 0 ? (
+              <button
+                type="button"
+                className="text-button day-panel-add"
+                onClick={createOpen ? () => setCreateOpen(false) : openCreateForm}
+              >
+                {createOpen ? '取消' : '＋ 新建任务'}
+              </button>
+            ) : null}
           </div>
+
+          {createOpen && projects.length > 0 ? (
+            <form className="day-panel-create" onSubmit={submitCreateTask}>
+              <select
+                value={newTaskProjectId}
+                onChange={(e) => setNewTaskProjectId(e.target.value)}
+                aria-label="选择项目"
+                required
+              >
+                <option value="">选择项目</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <input
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                placeholder="任务标题"
+                maxLength={120}
+                required
+                autoFocus
+              />
+              <input
+                type="date"
+                value={newTaskDueDate}
+                onChange={(e) => setNewTaskDueDate(e.target.value)}
+                aria-label="截止日期"
+              />
+              <button type="submit" className="primary-button sm" disabled={creating}>
+                {creating ? '创建中…' : '创建'}
+              </button>
+              {createError ? <p className="form-error">{createError}</p> : null}
+            </form>
+          ) : null}
+
           <div className="day-panel-list">
             {selectedTasks.length === 0 ? (
               <div className="calendar-empty-day">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore, replaceDB } from '@/lib/store/useStore';
 import { cloneDB } from '@/lib/store/store';
 import {
@@ -16,6 +16,47 @@ export function SettingsWorkspace() {
   const [backupMsg, setBackupMsg] = useState('');
   const [backupError, setBackupError] = useState('');
   const [busyBackup, setBusyBackup] = useState(false);
+
+  // 桌面通知权限状态：unsupported / default / granted / denied。
+  // notifyFocusCompletion 已写好，但它只在 permission === 'granted' 时才会真的弹，
+  // 全应用从没有地方调用 requestPermission() —— 这个开关把那条哑链路接通。
+  // 在 mount 前一律按 unsupported 渲染，避免 SSR（无 Notification）与客户端 hydration 不一致。
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const supportsNotify =
+    mounted && typeof Notification !== 'undefined' && 'permission' in Notification;
+  const [notifyPerm, setNotifyPerm] = useState<NotificationPermission | 'unsupported'>(
+    'unsupported',
+  );
+  const [notifyError, setNotifyError] = useState('');
+  const [notifyDebug, setNotifyDebug] = useState('');
+  useEffect(() => {
+    if (typeof Notification !== 'undefined' && 'permission' in Notification) {
+      setNotifyPerm(Notification.permission);
+    }
+  }, []);
+
+  async function toggleNotifications() {
+    if (!supportsNotify) return;
+    setNotifyError('');
+    setNotifyDebug('requesting…');
+    console.log('[notify] before', { current: Notification.permission });
+    try {
+      const result = await Notification.requestPermission();
+      console.log('[notify] result', result);
+      setNotifyPerm(result);
+      setNotifyDebug(`result: ${result}`);
+      if (result === 'denied') {
+        setNotifyError('浏览器静默拒绝了（没弹原生对话框就返回 denied）。地址栏左侧 🔒/⚙ → 通知 → 改成「允许」 → 刷新本页。');
+      } else if (result === 'default') {
+        setNotifyError('弹窗被关掉没选。再点一次重新请求。');
+      }
+    } catch (err) {
+      console.error('[notify] threw', err);
+      setNotifyError(err instanceof Error ? err.message : '请求通知权限失败');
+      setNotifyDebug(`threw: ${err}`);
+    }
+  }
 
   function exportBackupFn() {
     setBusyBackup(true);
@@ -94,6 +135,48 @@ export function SettingsWorkspace() {
         <h1>设置</h1>
         <p>管理本机数据备份。导出文件不含会话信息。</p>
       </header>
+
+      {supportsNotify ? (
+        <>
+          <section className="settings-block">
+            <div className="settings-block-head">
+              <h2 className="settings-block-title">桌面提醒</h2>
+              <p className="settings-block-desc">专注倒计时结束时在桌面弹出通知。权限只在本机生效。</p>
+            </div>
+            <div className="stack-form settings-block-body">
+              <div className="settings-export-row">
+                <p className="settings-export-copy">
+                  {notifyPerm === 'granted'
+                    ? '已启用：倒计时结束时会弹出桌面通知。'
+                    : notifyPerm === 'denied'
+                      ? '已被浏览器拒绝。在浏览器站点设置里重新允许后，再来这里启用。'
+                      : '尚未启用。点击开启会在浏览器请求一次通知权限。'}
+                </p>
+                {notifyPerm === 'granted' ? (
+                  <span className="settings-perm-on" aria-label="已启用">已开启</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={notifyPerm === 'denied'}
+                    onClick={() => void toggleNotifications()}
+                  >
+                    启用桌面提醒
+                  </button>
+                )}
+              </div>
+              {notifyDebug ? (
+                <p className="muted" style={{ fontFamily: 'monospace', fontSize: 12 }}>
+                  {notifyDebug} · current={notifyPerm}
+                </p>
+              ) : null}
+              {notifyError ? <p className="form-error">{notifyError}</p> : null}
+            </div>
+          </section>
+
+          <hr className="settings-hairline" />
+        </>
+      ) : null}
 
       <section className="settings-block">
         <div className="settings-block-head">

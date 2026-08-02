@@ -2,11 +2,23 @@ import { describe, expect, it } from 'vitest';
 import { emptyDB } from '@/lib/store/store';
 import type { ClarityDB } from '@/lib/store/store';
 import type { Project, TaskWithMeta } from '@/types/project';
+import { parseSubtaskInput } from '@/lib/project/validation';
 import {
   createProject,
   createTask,
+  createSubtask,
+  createTimeEntry,
+  deleteTimeEntry,
   getTaskEntity,
+  listTimeEntries,
+  listSubtasks,
+  listTasks,
+  moveTaskPosition,
   updateTask,
+  updateSubtask,
+  updateProject,
+  setProjectStatus,
+  getProjectSummary,
   weekMinutes,
   addTaskDependency,
   removeTaskDependency,
@@ -404,5 +416,185 @@ describe('task focus completion', () => {
     expect(db.timeEntries).toHaveLength(1);
     expect(db.timeEntries[0].minutes).toBe(1);
     expect(weekMinutes(db, '2026-07-27', '2026-08-02')).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Project editing and status transitions
+// ---------------------------------------------------------------------------
+
+describe('project editing', () => {
+  it('updateProject persists name/description/color/dates', () => {
+    const db = emptyDB();
+    const project = createProject(db, {
+      name: '旧名',
+      description: '旧描述',
+      color: '#5EEAD4',
+      target_date: null,
+      start_date: null,
+    });
+
+    updateProject(db, project.id, {
+      name: '新名',
+      description: '新描述',
+      color: '#7DD3FC',
+      target_date: '2026-12-31',
+      start_date: '2026-09-01',
+    });
+
+    const entity = getProjectSummary(db, project.id)!;
+    expect(entity.name).toBe('新名');
+    expect(entity.description).toBe('新描述');
+    expect(entity.color).toBe('#7DD3FC');
+    expect(entity.target_date).toBe('2026-12-31');
+    expect(entity.start_date).toBe('2026-09-01');
+    // 状态字段不被 updateProject 改动。
+    expect(entity.status).toBe('active');
+    // updated_at 仍是一个合法 ISO 时间戳。
+    expect(Number.isNaN(Date.parse(entity.updated_at))).toBe(false);
+  });
+
+  it('updateProject rejects unknown project', () => {
+    const db = emptyDB();
+    expect(() =>
+      updateProject(db, 'nonexistent', {
+        name: 'x',
+        description: '',
+        color: '#5EEAD4',
+        target_date: null,
+        start_date: null,
+      }),
+    ).toThrow('项目不存在');
+  });
+
+  it('setProjectStatus marks completed and records completed_at', () => {
+    const db = emptyDB();
+    const project = createProject(db, {
+      name: '项目',
+      description: '',
+      color: '#5EEAD4',
+      target_date: null,
+      start_date: null,
+    });
+    setProjectStatus(db, project.id, 'completed');
+    const entity = getProjectSummary(db, project.id)!;
+    expect(entity.status).toBe('completed');
+    expect(entity.completed_at).toBeTruthy();
+  });
+
+  it('setProjectStatus back to active clears completed_at', () => {
+    const db = emptyDB();
+    const project = createProject(db, {
+      name: '项目',
+      description: '',
+      color: '#5EEAD4',
+      target_date: null,
+      start_date: null,
+    });
+    setProjectStatus(db, project.id, 'completed');
+    setProjectStatus(db, project.id, 'active');
+    const entity = getProjectSummary(db, project.id)!;
+    expect(entity.status).toBe('active');
+    expect(entity.completed_at).toBeNull();
+  });
+
+  it('setProjectStatus archives without error', () => {
+    const db = emptyDB();
+    const project = createProject(db, {
+      name: '项目',
+      description: '',
+      color: '#5EEAD4',
+      target_date: null,
+      start_date: null,
+    });
+    setProjectStatus(db, project.id, 'archived');
+    const entity = getProjectSummary(db, project.id)!;
+    expect(entity.status).toBe('archived');
+  });
+
+  it('setProjectStatus rejects unknown project', () => {
+    const db = emptyDB();
+    expect(() => setProjectStatus(db, 'nonexistent', 'completed')).toThrow('项目不存在');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Manual task re-order (moveTaskPosition)
+// ---------------------------------------------------------------------------
+
+describe('task position reorder', () => {
+  // nextTaskPosition 给每个新任务一个比前面更小的 position（min-1），
+  // 因此 fixture 里 taskC(-2) < taskB(-1) < taskA(0)，listTasks 排序后是
+  // [taskC, taskB, taskA]。moveTaskPosition 交换的是「排序结果里的前后邻居」，
+  // 测试以排序后的相对位置为准，而不是原始 position 数值。
+
+  function orderOf(db: ClarityDB, ids: string[]): string[] {
+    const tasks = listTasks(db, db.tasks[0].project_id).filter((t) => ids.includes(t.id));
+    return tasks.map((t) => t.id);
+  }
+
+  it('moving a task up swaps it with its preceding sibling in sorted order', () => {
+    const { db, taskA, taskB, taskC } = fixtureDb();
+    expect(orderOf(db, [taskA.id, taskB.id, taskC.id])).toEqual([taskC.id, taskB.id, taskA.id]);
+    moveTaskPosition(db, taskA.id, 'up');
+    // A 和 B(now 前邻居) 交换 → B 沉到末、A 中间
+    expect(orderOf(db, [taskA.id, taskB.id, taskC.id])).toEqual([taskC.id, taskA.id, taskB.id]);
+  });
+
+  it('moving the first sibling up is a no-op', () => {
+    const { db, taskC } = fixtureDb();
+    const before = orderOf(db, [taskC.id]);
+    moveTaskPosition(db, taskC.id, 'up');
+    expect(orderOf(db, [taskC.id])).toEqual(before);
+    expect(getTaskEntity(db, taskC.id)!.position).toBe(-2);
+  });
+
+  it('moving a task down swaps it with its next sibling', () => {
+    const { db, taskA, taskB, taskC } = fixtureDb();
+    moveTaskPosition(db, taskC.id, 'down');
+    // C(首) 下移 → 与 B 交换
+    expect(orderOf(db, [taskA.id, taskB.id, taskC.id])).toEqual([taskB.id, taskC.id, taskA.id]);
+  });
+
+  it('rejects unknown task', () => {
+    const { db } = fixtureDb();
+    expect(() => moveTaskPosition(db, 'nonexistent', 'up')).toThrow('任务不存在');
+  });
+});
+
+describe('subtask rename and time entries', () => {
+  it('updateSubtask renames a subtask', () => {
+    const { db, taskA } = fixtureDb();
+    const sub = createSubtask(db, taskA.id, { title: '初稿' });
+    updateSubtask(db, sub.id, { title: '修订稿' });
+    const after = listSubtasks(db, taskA.id).find((s) => s.id === sub.id)!;
+    expect(after.title).toBe('修订稿');
+  });
+
+  it('parseSubtaskInput rejects blank title', () => {
+    expect(() => parseSubtaskInput({ title: '   ' })).toThrow();
+  });
+
+  it('updateSubtask accepts blank storage path without crashing', () => {
+    const { db, taskA } = fixtureDb();
+    const sub = createSubtask(db, taskA.id, { title: '初稿' });
+    // 仓储层不校验 title，只透传；UI 走 parseSubtaskInput 把关。这里只保证不崩。
+    expect(() => updateSubtask(db, sub.id, { title: '' })).not.toThrow();
+  });
+
+  it('createTimeEntry + listTimeEntries + deleteTimeEntry round-trip', () => {
+    const { db, taskA } = fixtureDb();
+    const entry = createTimeEntry(db, taskA.id, { minutes: 25, logged_date: '2026-08-02', note: '手动补录' });
+    expect(listTimeEntries(db, taskA.id)).toHaveLength(1);
+    deleteTimeEntry(db, entry.id);
+    expect(listTimeEntries(db, taskA.id)).toHaveLength(0);
+  });
+
+  it('createTimeEntry rejects archived project', () => {
+    const { db, taskA, project } = fixtureDb();
+    setProjectStatus(db, project.id, 'archived');
+    expect(() =>
+      createTimeEntry(db, taskA.id, { minutes: 25, logged_date: '2026-08-02', note: '' }),
+    ).toThrow('已归档项目不能记录耗时');
   });
 });

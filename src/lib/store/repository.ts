@@ -370,12 +370,18 @@ export function moveTaskPosition(
   db: ClarityDB,
   taskId: string,
   direction: 'up' | 'down',
+  manual = false,
 ): TaskWithMeta {
   const task = getTaskEntity(db, taskId);
   if (!task) throw new Error('任务不存在');
-  const siblings = listTasks(db, task.project_id).filter(
+  // siblings 必须与展示口径一致：manual=true 时只按 position 排（UI 列表手动排序模式），
+  // 否则随 listTasks 的自动复合排序（优先级 → 截止 → position）。
+  const siblingSource = listTasks(db, task.project_id).filter(
     (item) => item.status === task.status,
   );
+  const siblings = manual
+    ? [...siblingSource].sort((a, b) => a.position - b.position)
+    : siblingSource;
   const index = siblings.findIndex((item) => item.id === taskId);
   if (index < 0) throw new Error('任务不存在');
   const swapWith = direction === 'up' ? siblings[index - 1] : siblings[index + 1];
@@ -1171,11 +1177,16 @@ export function getWeekStats(db: ClarityDB, today: string): WeekStats {
     (task) => !archivedProjects.has(task.project_id) && task.status !== 'completed',
   ).length;
   const denom = completed + stillOpen;
+  // 与复盘口径保持一致：本周投入 = 任务专注分钟 + 项目级独立计时分钟。
+  // 只统计 timeEntries 会让今日台比复盘「本周」少算项目级时长。
+  const projectMinutesThisWeek = db.projectTimeEntries
+    .filter((entry) => entry.logged_date >= start && entry.logged_date <= today)
+    .reduce((sum, entry) => sum + entry.minutes, 0);
   return {
     completedThisWeek: completed,
     createdOrOpenThisWeek: denom,
     completionRate: denom === 0 ? 0 : completed / denom,
-    minutesThisWeek: weekMinutes(db, start, today),
+    minutesThisWeek: weekMinutes(db, start, today) + projectMinutesThisWeek,
     activeProjects: listProjects(db, 'active').length,
   };
 }

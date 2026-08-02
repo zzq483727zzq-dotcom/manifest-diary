@@ -5,7 +5,13 @@ import { useRouter } from 'next/navigation';
 import type { ProjectColor, ProjectStatus, ProjectSummary } from '@/types/project';
 import { PROJECT_COLORS, PROJECT_STATUS_LABELS } from '@/types/project';
 import { useStore, mutate } from '@/lib/store/useStore';
-import { createProject as createProjectRepo, deleteProject as deleteProjectFn, listProjects } from '@/lib/store/repository';
+import {
+  createProject as createProjectRepo,
+  deleteProject as deleteProjectFn,
+  listProjects,
+  updateProject as updateProjectFn,
+  setProjectStatus as setProjectStatusFn,
+} from '@/lib/store/repository';
 import { parseProjectInput } from '@/lib/project/validation';
 
 type Filter = 'active' | 'all' | 'completed' | 'archived';
@@ -24,6 +30,22 @@ const STATUS_MAP: Record<Filter, ProjectStatus | 'all'> = {
   archived: 'archived',
 };
 
+// 每种当前状态下，卡片菜单里可切换到的目标状态及其文案。
+const STATUS_TRANSITIONS: Record<ProjectStatus, Array<{ status: ProjectStatus; label: string }>> = {
+  active: [
+    { status: 'completed', label: '标记完成' },
+    { status: 'archived', label: '归档' },
+  ],
+  completed: [
+    { status: 'active', label: '恢复进行中' },
+    { status: 'archived', label: '归档' },
+  ],
+  archived: [
+    { status: 'active', label: '恢复进行中' },
+    { status: 'completed', label: '标记完成' },
+  ],
+};
+
 function todayLocal() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -35,6 +57,8 @@ export function ProjectsWorkspace() {
   const [filter, setFilter] = useState<Filter>('active');
   const [error, setError] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // null = 创建模式；非空 = 编辑该 project（预填字段，保存不跳转）。
+  const [editingProject, setEditingProject] = useState<ProjectSummary | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [name, setName] = useState('');
@@ -66,7 +90,30 @@ export function ProjectsWorkspace() {
     };
   }, [filter]);
 
-  function createProject(event: React.FormEvent) {
+  function openCreateDrawer() {
+    setEditingProject(null);
+    setName('');
+    setDescription('');
+    setColor(PROJECT_COLORS[0]);
+    setTargetDate('');
+    setStartDate(todayLocal());
+    setFormError('');
+    setDrawerOpen(true);
+  }
+
+  function openEditDrawer(project: ProjectSummary) {
+    setEditingProject(project);
+    setName(project.name);
+    setDescription(project.description);
+    setColor(project.color);
+    setTargetDate(project.target_date ?? '');
+    setStartDate(project.start_date ?? '');
+    setFormError('');
+    setMenuId(null);
+    setDrawerOpen(true);
+  }
+
+  function submitProjectForm(event: React.FormEvent) {
     event.preventDefault();
     setFormError('');
     setSaving(true);
@@ -78,22 +125,35 @@ export function ProjectsWorkspace() {
         target_date: targetDate || null,
         start_date: startDate || null,
       });
-      let createdId = '';
-      mutate((draft) => {
-        const created = createProjectRepo(draft, input);
-        createdId = created.id;
-      });
-      setDrawerOpen(false);
-      setName('');
-      setDescription('');
-      setColor(PROJECT_COLORS[0]);
-      setTargetDate('');
-      setStartDate(todayLocal());
-      router.push(`/projects/detail?id=${createdId}`);
+      if (editingProject) {
+        mutate((draft) => {
+          updateProjectFn(draft, editingProject.id, input);
+        });
+        setDrawerOpen(false);
+      } else {
+        let createdId = '';
+        mutate((draft) => {
+          const created = createProjectRepo(draft, input);
+          createdId = created.id;
+        });
+        setDrawerOpen(false);
+        router.push(`/projects/detail?id=${createdId}`);
+      }
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : '创建失败');
+      setFormError(err instanceof Error ? err.message : '保存失败');
     } finally {
       setSaving(false);
+    }
+  }
+
+  function changeProjectStatus(project: ProjectSummary, status: ProjectStatus) {
+    setMenuId(null);
+    try {
+      mutate((draft) => {
+        setProjectStatusFn(draft, project.id, status);
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '状态更新失败');
     }
   }
 
@@ -136,10 +196,7 @@ export function ProjectsWorkspace() {
         <button
           type="button"
           className="primary-button"
-          onClick={() => {
-            setStartDate(todayLocal());
-            setDrawerOpen(true);
-          }}
+          onClick={openCreateDrawer}
         >
           新建项目
         </button>
@@ -168,10 +225,7 @@ export function ProjectsWorkspace() {
           <button
             type="button"
             className="primary-button"
-            onClick={() => {
-              setStartDate(todayLocal());
-              setDrawerOpen(true);
-            }}
+            onClick={openCreateDrawer}
           >
             {emptyCopy.action}
           </button>
@@ -228,6 +282,31 @@ export function ProjectsWorkspace() {
                             role="menu"
                             onClick={(event) => event.stopPropagation()}
                           >
+                            <button
+                              type="button"
+                              className="project-card-menu-item"
+                              role="menuitem"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openEditDrawer(project);
+                              }}
+                            >
+                              编辑项目
+                            </button>
+                            {STATUS_TRANSITIONS[project.status].map((opt) => (
+                              <button
+                                key={opt.status}
+                                type="button"
+                                className="project-card-menu-item"
+                                role="menuitem"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  changeProjectStatus(project, opt.status);
+                                }}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
                             <button
                               type="button"
                               className="project-card-menu-item danger-text"
@@ -291,8 +370,10 @@ export function ProjectsWorkspace() {
             >
               ×
             </button>
-            <h2 id="create-project-title">创建一个可执行项目</h2>
-            <form className="stack-form" onSubmit={createProject}>
+            <h2 id="create-project-title">
+              {editingProject ? '编辑项目' : '创建一个可执行项目'}
+            </h2>
+            <form className="stack-form" onSubmit={submitProjectForm}>
               <label>
                 项目名称
                 <input
@@ -348,7 +429,13 @@ export function ProjectsWorkspace() {
               </label>
               {formError ? <p className="form-error">{formError}</p> : null}
               <button className="primary-button" disabled={saving} type="submit">
-                {saving ? '创建中…' : '创建项目'}
+                {saving
+                  ? editingProject
+                    ? '保存中…'
+                    : '创建中…'
+                  : editingProject
+                    ? '保存'
+                    : '创建项目'}
               </button>
             </form>
           </section>

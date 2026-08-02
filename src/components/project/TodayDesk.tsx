@@ -14,6 +14,7 @@ import {
 import type { TodayGroups, WeekStats } from '@/types/project';
 import { mutate, useStore } from '@/lib/store/useStore';
 import { getReviewStats, updateTask } from '@/lib/store/repository';
+import { useCountUp } from '@/lib/ui/useCountUp';
 import {
   safeStorageGetItem,
   safeStorageRemoveItem,
@@ -30,12 +31,22 @@ const GROUPS: Array<{
   title: string;
   empty: string;
   tone: 'danger' | 'accent' | 'neutral';
+  moreHrefKey?: 'today-calendar';
 }> = [
-  { key: 'overdue', title: '已逾期', empty: '没有逾期任务，节奏不错。', tone: 'danger' },
-  { key: 'dueToday', title: '今天到期', empty: '今天没有硬截止。', tone: 'accent' },
+  { key: 'overdue', title: '已逾期', empty: '没有逾期任务，节奏不错。', tone: 'danger', moreHrefKey: 'today-calendar' },
+  { key: 'dueToday', title: '今天到期', empty: '今天没有硬截止。', tone: 'accent', moreHrefKey: 'today-calendar' },
   { key: 'highSoon', title: '未来 3 天高优', empty: '近期没有高优任务。', tone: 'neutral' },
   { key: 'inProgress', title: '进行中', empty: '还没有进行中的任务。', tone: 'neutral' },
 ];
+
+function moreHrefFor(group: typeof GROUPS[number], today: string): string {
+  // 已逾期 + 今天到期 → 深链日历当日（日面板列当日截止项，比通用 /projects 更聚焦）；
+  // 其余组保持原行为跳到全部项目列表。
+  if (group.moreHrefKey === 'today-calendar') {
+    return `/calendar?day=${today}&view=week`;
+  }
+  return '/projects';
+}
 
 function dateLine(d: Date) {
   const week = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
@@ -175,10 +186,14 @@ export function TodayDesk({
           ? `有 ${overdueN} 条逾期、${dueN} 条今日到期。先清紧急，再看高优与进行中。`
           : `有 ${total} 条值得关注的任务，从最紧急的一组开始。`;
 
+  const completedCount = useCountUp(stats.completedThisWeek);
+  const activeProjects = useCountUp(stats.activeProjects);
+  const completionPct = useCountUp(Math.round(stats.completionRate * 100));
+
   const metrics = [
-    { label: '本周完成', value: String(stats.completedThisWeek) },
-    { label: '进行中项目', value: String(stats.activeProjects) },
-    { label: '完成率', value: `${Math.round(stats.completionRate * 100)}%` },
+    { label: '本周完成', value: String(Math.round(completedCount)) },
+    { label: '进行中项目', value: String(Math.round(activeProjects)) },
+    { label: '完成率', value: `${Math.round(completionPct)}%` },
     { label: '本周投入', value: formatMinutes(stats.minutesThisWeek) },
   ];
 
@@ -266,7 +281,7 @@ export function TodayDesk({
                     )}
 
                     {items.length > 5 ? (
-                      <Link href="/projects" className="td-more-link">
+                      <Link href={moreHrefFor(group, localDateString())} className="td-more-link">
                         还有 {items.length - 5} 条，查看全部
                       </Link>
                     ) : null}

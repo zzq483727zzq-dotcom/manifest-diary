@@ -28,28 +28,66 @@ body {
   * { transition: none !important; animation: none !important; }
 }
 
-/* Clarity — light modern project execution workspace
-   Mode: Operate. Restrained neutrals + one teal accent.
-   Design read: product workbench for personal project execution;
-   Linear-clean, calm desk, system sans, no marketing eyebrows. */
+/* Morning Mist Rice Tea — 动画语言。所有 keyframes 集中在此。
+   reduced-motion 在上块已全局 kill，新增 animation 自动尊重。 */
+@keyframes shimmer-sweep {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes progressFill {
+  from { width: 0; }
+}
+
+/* Clarity — Morning Mist Rice Tea. Warm linen + sage + terracotta.
+   Design read: calming personal execution desk; low chroma, soft ease,
+   system sans, layered shadows for depth without harshness. */
 :root {
-  /* Cool Fog Desk tokens — keep --life-* names for existing components */
-  --life-base: #f3f5f7;
-  --life-raised: #ffffff;
-  --life-soft: #e8ecf1;
-  --life-ink: #0f172a;
-  --life-muted: #64748b;
-  --life-line: rgba(15, 23, 42, 0.09);
-  --life-accent: #0f766e;
-  --life-accent-soft: rgba(15, 118, 110, 0.12);
-  --life-accent-deep: #0d5f59;
-  --life-danger: #be123c;
-  --life-success: #15803d;
-  --life-warning: #b45309;
-  --life-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 32px rgba(15, 23, 42, 0.06);
+  /* Morning Mist Rice Tea (晨雾米茶) — warm linen base + sage green +
+     terracotta companion. Low chroma lowers arousal; warm ink eases saccades.
+     Keep --life-* names so every existing component keeps working. */
+  --life-base: #f5efe4;
+  --life-raised: #fbf8f2;
+  --life-soft: #ebe2d3;
+  --life-ink: #2b2620;
+  --life-muted: #7a6f5f;
+  --life-line: rgba(43, 38, 32, 0.10);
+  --life-accent: #6b9080;        /* sage green — restorative attention */
+  --life-accent-soft: rgba(107, 144, 128, 0.14);
+  --life-accent-deep: #527a68;
+  --life-secondary-accent: #d4a88c;  /* terracotta — warm companion */
+  --life-secondary-soft: rgba(212, 168, 140, 0.18);
+  --life-overdue: #c08a6a;       /* warm terracotta-red owns overdue/urgent */
+  --life-overdue-soft: rgba(192, 138, 106, 0.16);
+  --life-danger: #b5605a;        /* dusty warm red, not clinical crimson */
+  --life-success: #7a9b6e;       /* soft olive */
+  --life-warning: #c8985a;       /* warm amber */
+  /* 三层阴影：贴底细线 + 中层柔晕 + 略带 sage 色相的远景环境光。
+     Linear/Notion surface 的质感来自这种分层而非单一 blur。 */
+  --life-shadow: 0 1px 2px rgba(43, 38, 32, 0.04), 0 6px 18px rgba(43, 38, 32, 0.05), 0 18px 40px rgba(43, 38, 32, 0.04);
+  /* 卡片上抬用的更强阴影，hover/focus 时切到这里，给"浮起"的触觉反馈。
+     远景带一点 sage 环境光，统一治愈系气质。 */
+  --life-shadow-raised: 0 1px 2px rgba(43, 38, 32, 0.05), 0 8px 22px rgba(43, 38, 32, 0.07), 0 24px 48px rgba(107, 144, 128, 0.07);
   --life-radius: 14px;
-  --life-ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --life-control: 0.16s var(--life-ease);
+  /* panel token 之前被 .settings-file-drop 引用却从未定义（静默坏值），补上。 */
+  --life-panel: #fbf8f2;
+  /* 页面底面：左上 sage 微光晕 + 右上暖墨淡阴影，灯从左上来。
+     不动 --life-base token（很多 surface 直接引它），只在 desk 叠一层。 */
+  --life-desk-bg: radial-gradient(1200px 600px at 12% -8%, rgba(107, 144, 128, 0.06), transparent 60%), radial-gradient(900px 500px at 100% 0%, rgba(43, 38, 32, 0.03), transparent 55%), var(--life-base);
+  /* 略柔的 ease-out，配合 0.2s 控制时长，比原来 0.16s 更轻。 */
+  --life-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --life-control: 0.2s var(--life-ease);
 }
 
 body {
@@ -59,7 +97,7 @@ body {
 
 .dashboard-frame {
   min-height: 100vh;
-  background: var(--life-base);
+  background: var(--life-desk-bg);
   color: var(--life-ink);
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
@@ -72,7 +110,10 @@ body {
   height: 100vh;
   padding: 22px 14px 18px;
   border-right: 1px solid var(--life-line);
-  background: #fff;
+  /* 侧边栏不再是纯白贴纸：极淡竖向渐变 + 右侧一层 accent 极弱辉光，
+     让侧栏与内容区之间有"光"而不只一条线。 */
+  background: linear-gradient(180deg, #fbf8f2 0%, #f7f1e6 100%);
+  box-shadow: 1px 0 0 rgba(107, 144, 128, 0.04), 0 0 0 0 transparent;
   display: flex;
   flex-direction: column;
   z-index: 5;
@@ -146,14 +187,14 @@ body {
 
 .dashboard-nav a:hover {
   color: var(--life-ink);
-  background: rgba(15, 23, 42, 0.035);
+  background: rgba(43, 38, 32, 0.035);
 }
 
 .dashboard-nav a.active {
   color: var(--life-ink);
   background: var(--life-raised);
   border-color: var(--life-line);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 1px 2px rgba(43, 38, 32, 0.04), 0 2px 6px rgba(43, 38, 32, 0.05);
   font-weight: 650;
 }
 
@@ -166,7 +207,7 @@ body {
 .sheet-close:focus-visible,
 .auth-card button:focus-visible,
 .auth-card input:focus-visible {
-  outline: 2px solid rgba(15, 118, 110, 0.45);
+  outline: 2px solid rgba(107, 144, 128, 0.45);
   outline-offset: 2px;
 }
 
@@ -182,7 +223,7 @@ body {
   padding: 0 6px;
   border-radius: 999px;
   background: var(--life-accent);
-  color: #fff;
+  color: #fbf8f2;
   font-size: 11px;
   font-style: normal;
   display: inline-grid;
@@ -212,7 +253,7 @@ body {
   padding: 7px 10px;
   border-radius: 999px;
   border: 1px solid var(--life-line);
-  background: #fff;
+  background: #fbf8f2;
   font-size: 12px;
 }
 
@@ -246,6 +287,114 @@ body {
   color: var(--life-ink);
 }
 
+/* ===== Sidebar global task search ===== */
+.sidebar-search {
+  position: relative;
+  margin: 14px 0 18px;
+}
+
+.sidebar-search-input {
+  width: 100%;
+  padding: 8px 11px;
+  border: 1px solid var(--life-line);
+  border-radius: 8px;
+  font-size: 13px;
+  background: #fbf8f2;
+  color: var(--life-ink);
+  font-family: inherit;
+  outline: none;
+  transition: border-color var(--life-control);
+}
+
+.sidebar-search-input::placeholder {
+  color: var(--life-muted);
+}
+
+.sidebar-search-input:focus {
+  border-color: var(--life-accent);
+  box-shadow: 0 0 0 3px rgba(107, 144, 128, 0.12);
+}
+
+.sidebar-search-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 360px;
+  overflow-y: auto;
+  background: #fbf8f2;
+  border: 1px solid var(--life-line);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(43, 38, 32, 0.14);
+  z-index: 30;
+  padding: 4px;
+}
+
+.sidebar-search-empty {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--life-muted);
+}
+
+.sidebar-search-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--life-control);
+}
+
+.sidebar-search-item:hover {
+  background: var(--life-soft);
+}
+
+.sidebar-search-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+.sidebar-search-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.sidebar-search-text strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--life-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-search-meta {
+  font-size: 11px;
+  color: var(--life-muted);
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-search-meta span {
+  opacity: 0.6;
+}
+
 .dashboard-content {
   min-width: 0;
   position: relative;
@@ -258,9 +407,29 @@ body {
   padding: 32px clamp(18px, 4vw, 40px) 80px;
 }
 
+/* 页面入场：直系子块渐次浮现（fadeInUp + nth-child stagger，封顶 4 档）。
+   gated 在 prefers-reduced-motion: no-preference 下，与 L3849 模式一致；
+   reduced-motion 用户的 page 是直接静态呈现、无动画。 */
+@media (prefers-reduced-motion: no-preference) {
+  .module-page > * {
+    animation: fadeInUp 0.5s var(--life-ease) both;
+  }
+  .module-page > *:nth-child(1) { animation-delay: 0s; }
+  .module-page > *:nth-child(2) { animation-delay: 0.05s; }
+  .module-page > *:nth-child(3) { animation-delay: 0.1s; }
+  .module-page > *:nth-child(4) { animation-delay: 0.15s; }
+  .module-page > *:nth-child(n + 5) { animation-delay: 0.18s; }
+}
+
 .module-header {
   max-width: 640px;
   margin-bottom: 28px;
+  /* 标题区底部一条极淡分隔线 + 左侧 2px accent 色条，
+     把"页头"从一条漂浮文字变成一个有边界的块，且引入一处 accent 点缀。 */
+  padding: 4px 0 20px 14px;
+  border-bottom: 1px solid var(--life-line);
+  border-left: 2px solid var(--life-accent);
+  position: relative;
 }
 
 .module-header h1 {
@@ -323,10 +492,29 @@ body {
 
 .life-card {
   background: var(--life-raised);
+  /* 顶部 1px 高光线（inset）给卡片"被光打到"的边缘，配合外阴影浮起。
+     这是单调白卡最便宜也最有效的质感提升。 */
+  box-shadow: inset 0 1px 0 rgba(251, 248, 242, 0.85), var(--life-shadow);
   border: 1px solid var(--life-line);
   border-radius: var(--life-radius);
   padding: 20px;
-  box-shadow: none;
+  transition: transform var(--life-control), box-shadow var(--life-control), border-color var(--life-control);
+}
+
+/* 可交互的卡片（项目卡、日历日、复盘块等）上抬一档，强化"可点"。
+   关键 surface（drawer、auth-cart）不走这条 hover raise，仍用 --life-shadow。
+   这里只对显式 role=button 的 life-card 生效，避免无差别抖动整屏元素。 */
+.life-card[role="button"]:hover {
+  transform: translateY(-2px);
+  box-shadow: inset 0 1px 0 rgba(251, 248, 242, 0.9), var(--life-shadow-raised);
+  border-color: rgba(107, 144, 128, 0.28);
+}
+.life-card[role="button"]:active {
+  transform: translateY(0);
+}
+.life-card[role="button"]:focus-visible {
+  outline: 2px solid var(--life-accent);
+  outline-offset: 2px;
 }
 
 .module-note h2 {
@@ -367,7 +555,7 @@ body {
 
 .auth-card {
   width: min(400px, 100%);
-  background: #fff;
+  background: #fbf8f2;
   border: 1px solid var(--life-line);
   border-radius: 16px;
   padding: 32px;
@@ -420,15 +608,15 @@ body {
 
 .auth-card input:focus {
   outline: none;
-  border-color: rgba(15, 118, 110, 0.4);
-  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
+  border-color: rgba(107, 144, 128, 0.4);
+  box-shadow: 0 0 0 3px rgba(107, 144, 128, 0.1);
 }
 
 .auth-card button {
   border: 0;
   border-radius: 10px;
   background: var(--life-accent);
-  color: #fff;
+  color: #fbf8f2;
   padding: 12px;
   font-weight: 650;
   cursor: pointer;
@@ -449,11 +637,14 @@ body {
 .sheet-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.28);
-  backdrop-filter: blur(6px);
+  /* 抽屉背板：略深 + 一点 sage 色相，配合下方 drawer 的分层阴影，
+     让抽屉"浮在空间里"而非贴一张白纸。淡入配合下方 slideInRight。 */
+  background: radial-gradient(700px 320px at 100% 0%, rgba(107, 144, 128, 0.08) 0%, rgba(43, 38, 32, 0.34) 60%);
+  backdrop-filter: blur(8px);
   z-index: 50;
   display: flex;
   justify-content: flex-end;
+  animation: fadeIn 0.24s var(--life-ease) both;
 }
 
 .quick-sheet,
@@ -465,7 +656,9 @@ body {
   padding: 28px 24px;
   position: relative;
   overflow: auto;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 24px 48px rgba(15, 23, 42, 0.1);
+  box-shadow: 0 1px 2px rgba(43, 38, 32, 0.04), 0 24px 48px rgba(43, 38, 32, 0.1);
+  /* 抽屉从右侧滑入（替代硬切 mount），配合上层 fadeIn 背板。 */
+  animation: slideInRight 0.32s var(--life-ease) both;
 }
 
 .drawer-panel {
@@ -485,6 +678,9 @@ body {
   .dashboard-sidebar {
     display: none;
   }
+  .sidebar-search {
+    display: none;
+  }
   .module-grid {
     grid-template-columns: 1fr;
   }
@@ -495,7 +691,7 @@ body {
     left: 0;
     right: 0;
     height: 68px;
-    background: rgba(255, 255, 255, 0.94);
+    background: rgba(251, 248, 242, 0.94);
     backdrop-filter: blur(14px);
     border-top: 1px solid var(--life-line);
     z-index: 40;
@@ -533,7 +729,7 @@ body {
   border: 0;
   border-radius: 10px;
   background: var(--life-accent);
-  color: #fff;
+  color: #fbf8f2;
   padding: 11px 15px;
   font-weight: 650;
   cursor: pointer;
@@ -545,7 +741,7 @@ body {
 }
 
 .primary-button:hover {
-  background: #0d6a63;
+  background: var(--life-accent-deep);
 }
 
 .primary-button:active {
@@ -567,7 +763,7 @@ body {
 
 .filter-chip {
   border: 1px solid var(--life-line);
-  background: #fff;
+  background: #fbf8f2;
   color: var(--life-muted);
   border-radius: 999px;
   padding: 6px 13px;
@@ -575,16 +771,20 @@ body {
   font-size: 13px;
   font-weight: 500;
   line-height: 1.5;
-  transition: background var(--life-control), color var(--life-control), border-color var(--life-control);
+  transition: background var(--life-control), color var(--life-control), border-color var(--life-control), transform var(--life-control);
 }
 
 .filter-chip:hover {
   color: var(--life-ink);
 }
 
+.filter-chip:active {
+  transform: scale(0.97);
+}
+
 .filter-chip.active {
   color: var(--life-accent);
-  border-color: rgba(15, 118, 110, 0.28);
+  border-color: rgba(107, 144, 128, 0.28);
   background: var(--life-accent-soft);
   font-weight: 600;
 }
@@ -619,8 +819,8 @@ body {
 }
 
 .project-card:hover {
-  border-color: rgba(15, 118, 110, 0.3);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 24px rgba(15, 23, 42, 0.06);
+  border-color: rgba(107, 144, 128, 0.3);
+  box-shadow: 0 1px 2px rgba(43, 38, 32, 0.04), 0 10px 24px rgba(43, 38, 32, 0.06);
 }
 
 .project-card:active {
@@ -651,7 +851,7 @@ body {
 
 .project-status-pill {
   border: 1px solid var(--life-line);
-  background: #fff;
+  background: #fbf8f2;
   color: var(--life-muted);
   border-radius: 999px;
   padding: 2px 9px;
@@ -663,7 +863,7 @@ body {
 }
 
 .project-status-pill.project-status-active {
-  color: #0d9488;
+  color: var(--life-accent);
   border-color: rgba(13, 148, 136, 0.28);
   background: rgba(13, 148, 136, 0.08);
 }
@@ -677,7 +877,7 @@ body {
 .project-status-pill.project-status-archived {
   color: var(--life-muted);
   border-color: var(--life-line);
-  background: #f8fafc;
+  background: #ebe2d3;
 }
 
 .project-card h2 {
@@ -756,11 +956,13 @@ body {
   height: 100%;
   background: var(--life-accent);
   border-radius: inherit;
+  /* 进度条填充：inline width 变化时 0.6s 平滑推进，而非硬跳。 */
+  transition: width 0.6s var(--life-ease);
 }
 
 .skeleton-card {
   min-height: 160px;
-  background: linear-gradient(90deg, #fff, #f2f5f8, #fff);
+  background: linear-gradient(90deg, #fbf8f2, #efe9dc, #fbf8f2);
   background-size: 200% 100%;
   animation: shimmer-sweep 1.4s linear infinite;
 }
@@ -784,7 +986,7 @@ body {
   height: 40px;
   border-radius: 12px;
   background: var(--life-accent-soft);
-  border: 1px solid rgba(15, 118, 110, 0.18);
+  border: 1px solid rgba(107, 144, 128, 0.18);
   display: block;
   margin-bottom: 22px;
   position: relative;
@@ -839,7 +1041,7 @@ body {
   height: 34px;
   border-radius: 50%;
   border: 1px solid var(--life-line);
-  background: #fff;
+  background: #fbf8f2;
   color: var(--life-ink);
   cursor: pointer;
 }
@@ -871,8 +1073,8 @@ body {
 .stack-form input:focus,
 .stack-form textarea:focus {
   outline: none;
-  border-color: rgba(15, 118, 110, 0.4);
-  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
+  border-color: rgba(107, 144, 128, 0.4);
+  box-shadow: 0 0 0 3px rgba(107, 144, 128, 0.1);
 }
 
 .input-with-suffix {
@@ -977,7 +1179,7 @@ body {
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.02em;
-  background: rgba(255, 255, 255, 0.45);
+  background: rgba(251, 248, 242, 0.45);
 }
 
 .board-column-head strong {
@@ -1018,8 +1220,8 @@ body {
 }
 
 .task-card:hover {
-  border-color: rgba(15, 118, 110, 0.3);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 18px rgba(15, 23, 42, 0.05);
+  border-color: rgba(107, 144, 128, 0.3);
+  box-shadow: 0 1px 2px rgba(43, 38, 32, 0.04), 0 6px 18px rgba(43, 38, 32, 0.05);
 }
 
 .task-card:active {
@@ -1128,7 +1330,7 @@ body {
 }
 .status-pill.status-in_progress {
   background: var(--life-accent-soft);
-  border-color: rgba(15, 118, 110, 0.32);
+  border-color: rgba(107, 144, 128, 0.32);
   color: var(--life-accent-deep);
 }
 .status-pill.status-in_progress::before {
@@ -1155,8 +1357,8 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  border: 1px solid rgba(190, 18, 60, 0.28);
-  background: #fff1f2;
+  border: 1px solid rgba(181, 96, 90, 0.28);
+  background: #fbf8f21f2;
   color: var(--life-danger);
   border-radius: 10px;
   padding: 8px 13px;
@@ -1173,8 +1375,8 @@ body {
   background: var(--life-danger);
 }
 .danger-ghost:hover {
-  background: #ffe1e7;
-  border-color: rgba(190, 18, 60, 0.45);
+  background: #fbeae6;
+  border-color: rgba(181, 96, 90, 0.45);
 }
 .danger-ghost:active {
   transform: scale(0.97);
@@ -1185,13 +1387,13 @@ body {
   height: 8px;
   border-radius: 999px;
   display: inline-block;
-  background: #94a3b8;
+  background: #a89c8a;
   flex-shrink: 0;
 }
 
-.priority-dot.high { background: #e11d48; }
-.priority-dot.medium { background: #d97706; }
-.priority-dot.low { background: #94a3b8; }
+.priority-dot.high { background: var(--life-overdue); }
+.priority-dot.medium { background: var(--life-warning); }
+.priority-dot.low { background: #a89c8a; }
 
 .text-button {
   border: 0;
@@ -1244,8 +1446,8 @@ body {
 }
 
 .danger-button {
-  border: 1px solid rgba(190, 18, 60, 0.18);
-  background: #fff1f2;
+  border: 1px solid rgba(181, 96, 90, 0.18);
+  background: #fbf8f21f2;
   color: var(--life-danger);
   border-radius: 10px;
   padding: 11px 14px;
@@ -1341,6 +1543,78 @@ body {
   gap: 8px;
 }
 
+/* 子任务标题：点改改名用的可点击文本 + 编辑输入框 */
+.subtask-title-btn {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--life-ink);
+  font: inherit;
+  text-align: left;
+  cursor: text;
+  min-width: 0;
+}
+.subtask-title-btn:disabled {
+  cursor: default;
+}
+.subtask-title-btn.is-done {
+  color: var(--life-muted);
+  text-decoration: line-through;
+}
+.subtask-edit-input {
+  font: inherit;
+  padding: 2px 6px;
+  border: 1px solid var(--life-accent);
+  border-radius: 6px;
+  background: var(--life-base);
+  color: var(--life-ink);
+  min-width: 0;
+}
+
+/* 任务抽屉里的专注时间明细（比 time-entry-list 更轻，专为抽屉场景） */
+.drawer-time-list {
+  display: grid;
+  gap: 2px;
+  margin-top: 6px;
+}
+.drawer-time-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--life-line);
+  font-size: 13px;
+}
+.drawer-time-row:last-child {
+  border-bottom: 0;
+}
+.drawer-time-date {
+  color: var(--life-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.drawer-time-mins {
+  color: var(--life-ink);
+  white-space: nowrap;
+}
+.drawer-time-note {
+  color: var(--life-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 设置页：桌面提醒已开启的小标签 */
+.settings-perm-on {
+  color: var(--life-accent);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+
 .inline-actions {
   display: flex;
   gap: 12px;
@@ -1353,7 +1627,7 @@ body {
 
 .secondary-button {
   border: 1px solid var(--life-line);
-  background: #fff;
+  background: #fbf8f2;
   color: var(--life-ink);
   border-radius: 10px;
   padding: 10px 14px;
@@ -1363,7 +1637,7 @@ body {
 }
 
 .secondary-button:hover {
-  border-color: rgba(15, 118, 110, 0.35);
+  border-color: rgba(107, 144, 128, 0.35);
   color: var(--life-accent);
 }
 
@@ -1373,7 +1647,7 @@ body {
 
 /* ===== Execution condition (drawer) ===== */
 .eco-ready {
-  color: var(--life-success, #22c55e);
+  color: var(--life-success);
   font-size: 12px;
   font-weight: 600;
 }
@@ -1488,9 +1762,9 @@ body {
   margin-top: 6px;
   padding: 8px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(190, 18, 60, 0.18);
-  background: rgba(190, 18, 60, 0.06);
-  color: #9f1239;
+  border: 1px solid rgba(181, 96, 90, 0.18);
+  background: rgba(181, 96, 90, 0.06);
+  color: var(--life-overdue);
   font-size: 12.5px;
   font-weight: 650;
 }
@@ -1499,7 +1773,7 @@ body {
   width: 7px;
   height: 7px;
   border-radius: 999px;
-  background: #e11d48;
+  background: var(--life-overdue);
 }
 
 .td-stats {
@@ -1510,7 +1784,7 @@ body {
 }
 
 .td-stat {
-  background: #fff;
+  background: #fbf8f2;
   border: 1px solid var(--life-line);
   border-radius: 14px;
   padding: 16px 18px 15px;
@@ -1553,7 +1827,7 @@ body {
 }
 
 .td-panel {
-  background: #fff;
+  background: #fbf8f2;
   border: 1px solid var(--life-line);
   border-radius: 16px;
   padding: 14px 14px 10px;
@@ -1561,14 +1835,14 @@ body {
 }
 
 .td-panel.tone-accent {
-  border-color: rgba(15, 118, 110, 0.14);
+  border-color: rgba(107, 144, 128, 0.14);
 }
 
 .td-panel.is-hot {
-  border-color: rgba(190, 18, 60, 0.2);
+  border-color: rgba(181, 96, 90, 0.2);
   background:
-    linear-gradient(180deg, rgba(190, 18, 60, 0.045), transparent 56%),
-    #fff;
+    linear-gradient(180deg, rgba(181, 96, 90, 0.045), transparent 56%),
+    #fbf8f2;
 }
 
 .td-panel-h {
@@ -1591,18 +1865,18 @@ body {
 }
 
 .td-panel.is-hot .td-panel-h h2 {
-  color: #9f1239;
+  color: var(--life-overdue);
 }
 
 .td-pip {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: #94a3b8;
+  background: #a89c8a;
   display: inline-block;
 }
 
-.td-pip.tone-danger { background: #e11d48; }
+.td-pip.tone-danger { background: var(--life-overdue); }
 .td-pip.tone-accent { background: var(--life-accent); }
 
 .td-count {
@@ -1620,8 +1894,8 @@ body {
 }
 
 .td-panel.is-hot .td-count {
-  background: rgba(190, 18, 60, 0.1);
-  color: #9f1239;
+  background: rgba(181, 96, 90, 0.1);
+  color: var(--life-overdue);
 }
 
 .td-panel-empty {
@@ -1667,10 +1941,10 @@ body {
   width: 18px;
   height: 18px;
   margin-top: 1px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--life-line);
   border-radius: 5px;
-  background: #fff;
-  color: #fff;
+  background: #fbf8f2;
+  color: #fbf8f2;
   font-size: 12px;
   line-height: 1;
   cursor: pointer;
@@ -1723,7 +1997,7 @@ body {
 }
 
 .td-row.hot .td-row-link strong {
-  color: #9f1239;
+  color: var(--life-overdue);
 }
 
 .td-row:hover .td-row-link strong {
@@ -1793,7 +2067,7 @@ body {
 
 .td-proj {
   display: block;
-  background: #fff;
+  background: #fbf8f2;
   border: 1px solid var(--life-line);
   border-radius: 16px;
   padding: 16px;
@@ -1803,7 +2077,7 @@ body {
 }
 
 .td-proj:hover {
-  border-color: rgba(15, 118, 110, 0.28);
+  border-color: rgba(107, 144, 128, 0.28);
   box-shadow: var(--life-shadow);
   transform: translateY(-1px);
 }
@@ -1858,7 +2132,7 @@ body {
 
 .td-empty {
   max-width: 560px;
-  background: #fff;
+  background: #fbf8f2;
   border: 1px solid var(--life-line);
   border-radius: 18px;
   padding: 32px 28px;
@@ -1895,7 +2169,7 @@ body {
   width: 26px;
   height: 26px;
   background: var(--life-accent-soft);
-  border: 1px solid rgba(15, 118, 110, 0.2);
+  border: 1px solid rgba(107, 144, 128, 0.2);
 }
 
 .td-empty-rail {
@@ -1903,7 +2177,7 @@ body {
   bottom: 0;
   width: 44px;
   height: 8px;
-  background: #fff;
+  background: #fbf8f2;
   border: 1px solid var(--life-line);
 }
 
@@ -1987,7 +2261,7 @@ body {
 .review-range-preset:focus-visible,
 .review-details-toggle:focus-visible,
 .review-custom-dates input:focus-visible {
-  outline: 2px solid rgba(15, 118, 110, 0.45);
+  outline: 2px solid rgba(107, 144, 128, 0.45);
   outline-offset: 2px;
 }
 
@@ -2226,6 +2500,214 @@ body {
   }
 }
 
+/* ===== Time log page ===== */
+.time-form-section {
+  margin-bottom: 32px;
+}
+
+.time-form-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 12px;
+  color: var(--life-ink);
+}
+
+.time-form {
+  background: #fbf8f2;
+  border: 1px solid var(--life-line);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.time-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.time-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+  flex: 1;
+}
+
+.time-form-field-wide {
+  flex: 2;
+  min-width: 200px;
+}
+
+.time-form-field span {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--life-muted);
+}
+
+.time-form-field input,
+.time-form-field select {
+  padding: 8px 10px;
+  border: 1px solid var(--life-line);
+  border-radius: 8px;
+  font-size: 14px;
+  background: #fbf8f2;
+  color: var(--life-ink);
+  font-family: inherit;
+}
+
+.time-form-field input:focus,
+.time-form-field select:focus {
+  outline: 2px solid rgba(107, 144, 128, 0.3);
+  outline-offset: 1px;
+  border-color: var(--life-accent);
+}
+
+.time-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.time-group {
+  border: 1px solid var(--life-line);
+  border-radius: 12px;
+  background: #fbf8f2;
+  overflow: hidden;
+}
+
+.time-group-date {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 16px;
+  margin: 0;
+  border-bottom: 1px solid var(--life-line);
+  background: var(--life-base);
+  color: var(--life-ink);
+}
+
+.time-entry-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.time-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--life-line);
+  transition: opacity 0.2s;
+}
+
+.time-entry:last-child {
+  border-bottom: 0;
+}
+
+.time-entry-deleting {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.time-entry-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.time-entry-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.time-entry-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.time-entry-task {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--life-ink);
+}
+
+.time-entry-project {
+  color: var(--life-muted);
+}
+
+.time-entry-project-only {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--life-ink);
+}
+
+.time-entry-tag {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--life-base);
+  color: var(--life-muted);
+  border: 1px solid var(--life-line);
+  line-height: 1.5;
+}
+
+.time-entry-note {
+  font-size: 13px;
+  color: var(--life-muted);
+  margin: 2px 0 0;
+  line-height: 1.5;
+}
+
+.time-entry-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.time-entry-mins {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--life-ink);
+  min-width: 48px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.time-entry-del {
+  background: none;
+  border: 0;
+  color: var(--life-muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-family: inherit;
+}
+
+.time-entry-del:hover {
+  color: var(--life-danger);
+  background: rgba(220, 38, 38, 0.06);
+}
+
+.time-entry-del:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.time-group-total {
+  font-size: 12px;
+  color: var(--life-muted);
+  text-align: right;
+  padding: 8px 16px;
+  margin: 0;
+  border-top: 1px solid var(--life-line);
+  background: var(--life-base);
+}
+
 /* ===== Project board — Cool Fog Desk / Operate, pb-* scoped surface =====
    Fog-soft columns hold white task cards; restrained teal is the only accent.
    Vocabulary mirrors the Today desk (td-*) so the two workbench surfaces
@@ -2337,15 +2819,18 @@ body {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background var(--life-control), color var(--life-control);
+  transition: background var(--life-control), color var(--life-control), transform var(--life-control);
 }
 .pb-view:hover {
   color: var(--life-ink);
 }
+.pb-view:active {
+  transform: scale(0.97);
+}
 .pb-view.active {
   background: var(--life-raised);
   color: var(--life-ink);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 1px 2px rgba(43, 38, 32, 0.05);
 }
 
 /* neutral ghost button (记录耗时 / 删除项目 ride primary/danger variants) --- */
@@ -2363,16 +2848,16 @@ body {
   transition: background var(--life-control), border-color var(--life-control), transform var(--life-control);
 }
 .pb-ghost:hover {
-  border-color: rgba(15, 118, 110, 0.3);
+  border-color: rgba(107, 144, 128, 0.3);
 }
 .pb-ghost.active {
   background: var(--life-soft);
-  border-color: rgba(15, 118, 110, 0.4);
+  border-color: rgba(107, 144, 128, 0.4);
   color: var(--life-accent);
 }
 
 .pb-stat.is-over em {
-  color: #9f1239;
+  color: var(--life-overdue);
 }
 
 /* project-level time section ----------------------------------------- */
@@ -2449,9 +2934,9 @@ body {
   transition: border-color var(--life-control), color var(--life-control), background var(--life-control);
 }
 .project-card-menu-trigger:hover {
-  border-color: rgba(190, 18, 60, 0.4);
+  border-color: rgba(181, 96, 90, 0.4);
   color: var(--life-danger);
-  background: #fff1f2;
+  background: #fbf8f21f2;
 }
 .project-card-menu-pop {
   position: absolute;
@@ -2460,10 +2945,10 @@ body {
   z-index: 20;
   min-width: 132px;
   border: 1px solid var(--life-line);
-  background: #fff;
+  background: #fbf8f2;
   border-radius: 12px;
   padding: 5px;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 8px 22px rgba(43, 38, 32, 0.12);
 }
 .project-card-menu-item {
   display: block;
@@ -2492,7 +2977,7 @@ body {
   font-weight: 600;
 }
 .project-card-menu-item.danger-text:hover:not(:disabled) {
-  background: #fff1f2;
+  background: #fbf8f21f2;
 }
 
 /* board columns ------------------------------------------------------ */
@@ -2513,7 +2998,7 @@ body {
   overflow: hidden;
 }
 .pb-col.tone-accent {
-  border-color: rgba(15, 118, 110, 0.16);
+  border-color: rgba(107, 144, 128, 0.16);
 }
 /* 已完成列降一档：比待办列更静，对应 FIRST VIEWPORT 承诺的"slightly quieted"。 */
 .pb-col.tone-done {
@@ -2529,7 +3014,7 @@ body {
   gap: 10px;
   padding: 14px 16px 12px;
   border-bottom: 1px solid var(--life-line);
-  background: rgba(255, 255, 255, 0.45);
+  background: rgba(251, 248, 242, 0.45);
 }
 .pb-col-h h2 {
   display: inline-flex;
@@ -2545,7 +3030,7 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: #94a3b8;
+  background: #a89c8a;
   display: inline-block;
 }
 .pb-pip.tone-accent { background: var(--life-accent); }
@@ -2586,14 +3071,14 @@ body {
   transition: border-color var(--life-control), box-shadow var(--life-control), transform var(--life-control);
 }
 .pb-card:hover {
-  border-color: rgba(15, 118, 110, 0.3);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 18px rgba(15, 23, 42, 0.05);
+  border-color: rgba(107, 144, 128, 0.3);
+  box-shadow: 0 1px 2px rgba(43, 38, 32, 0.04), 0 6px 18px rgba(43, 38, 32, 0.05);
 }
 .pb-card:active {
   transform: scale(0.985);
 }
 .pb-card.is-over {
-  border-color: rgba(190, 18, 60, 0.26);
+  border-color: rgba(181, 96, 90, 0.26);
 }
 
 .pb-status {
@@ -2627,7 +3112,7 @@ body {
 .pb-status:hover::before { opacity: 1; }
 .pb-status.tone-in_progress {
   background: var(--life-accent-soft);
-  border-color: rgba(15, 118, 110, 0.32);
+  border-color: rgba(107, 144, 128, 0.32);
   color: var(--life-accent-deep);
 }
 .pb-status.tone-in_progress::before { background: var(--life-accent); opacity: 1; }
@@ -2678,15 +3163,15 @@ body {
   height: 8px;
   border-radius: 999px;
   display: inline-block;
-  background: #94a3b8;
+  background: #a89c8a;
   flex-shrink: 0;
 }
-.pb-pdot.high { background: #e11d48; }
-.pb-pdot.medium { background: #d97706; }
-.pb-pdot.low { background: #94a3b8; }
+.pb-pdot.high { background: var(--life-overdue); }
+.pb-pdot.medium { background: var(--life-warning); }
+.pb-pdot.low { background: #a89c8a; }
 .pb-meta-pri { font-weight: 600; color: var(--life-muted); }
 .pb-meta-date { font-variant-numeric: tabular-nums; }
-.pb-meta-date.is-over { color: #9f1239; font-weight: 650; }
+.pb-meta-date.is-over { color: var(--life-overdue); font-weight: 650; }
 .pb-meta-sub,
 .pb-meta-min { font-variant-numeric: tabular-nums; }
 
@@ -2698,13 +3183,13 @@ body {
   font-size: 12px;
   font-weight: 650;
   background: var(--life-accent-soft);
-  color: #0f766e;
-  border: 1px solid rgba(15, 118, 110, 0.18);
+  color: var(--life-accent);
+  border: 1px solid rgba(107, 144, 128, 0.18);
   display: inline-block;
 }
 
 .pb-focus-button {
-  border: 1px solid rgba(15, 118, 110, 0.24);
+  border: 1px solid rgba(107, 144, 128, 0.24);
   background: var(--life-accent-soft);
   color: var(--life-accent-deep);
   border-radius: 8px;
@@ -2734,12 +3219,12 @@ body {
 
 .pb-focus-end:hover {
   color: var(--life-danger);
-  background: rgba(190, 18, 60, 0.06);
+  background: rgba(181, 96, 90, 0.06);
 }
 
 .pb-focus-button:hover {
-  border-color: rgba(15, 118, 110, 0.45);
-  background: #ccfbf1;
+  border-color: rgba(107, 144, 128, 0.45);
+  background: var(--life-accent-soft);
 }
 
 .pb-focus-end.sm,
@@ -2761,22 +3246,22 @@ body {
   padding: 12px 14px;
   border: 1px solid var(--life-line);
   border-radius: 14px;
-  background: #fff;
+  background: #fbf8f2;
   transition: border-color var(--life-control), background var(--life-control);
 }
 
 .cd.is-running {
-  border-color: rgba(15, 118, 110, 0.35);
+  border-color: rgba(107, 144, 128, 0.35);
   background:
-    linear-gradient(180deg, rgba(15, 118, 110, 0.05), transparent 60%),
-    #fff;
+    linear-gradient(180deg, rgba(107, 144, 128, 0.05), transparent 60%),
+    #fbf8f2;
 }
 
 .cd.is-due {
-  border-color: rgba(190, 18, 60, 0.4);
+  border-color: rgba(181, 96, 90, 0.4);
   background:
-    linear-gradient(180deg, rgba(190, 18, 60, 0.06), transparent 60%),
-    #fff;
+    linear-gradient(180deg, rgba(181, 96, 90, 0.06), transparent 60%),
+    #fbf8f2;
 }
 
 .cd-ro {
@@ -2795,7 +3280,7 @@ body {
   min-width: 4ch;
 }
 
-.cd.is-due .cd-time { color: #9f1239; }
+.cd.is-due .cd-time { color: var(--life-overdue); }
 
 .cd-sub {
   display: flex;
@@ -2818,7 +3303,7 @@ body {
   border-radius: 8px;
   font-size: 12.5px;
   color: var(--life-ink);
-  background: #fff;
+  background: #fbf8f2;
 }
 .cd-target-input:disabled {
   background: var(--life-soft);
@@ -2886,7 +3371,7 @@ body {
 .pb-filter:hover { color: var(--life-ink); }
 .pb-filter.active {
   background: var(--life-accent-soft);
-  border-color: rgba(15, 118, 110, 0.32);
+  border-color: rgba(107, 144, 128, 0.32);
   color: var(--life-accent-deep);
 }
 
@@ -2907,19 +3392,45 @@ body {
   font-size: 13px;
 }
 .pb-list-row:last-child { border-bottom: 0; }
+/* 手动排序模式下，行首多一列上下移按钮区 */
+.pb-list-row.pb-manual-row {
+  grid-template-columns: 64px 86px minmax(0, 1.6fr) 86px 110px 72px;
+}
+.pb-reorder-actions {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+}
+.text-button.sm {
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 6px;
+}
+.pb-manual-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--life-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.pb-manual-toggle input {
+  cursor: pointer;
+}
 .pb-list-pri {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   font-weight: 600;
 }
-.pb-list-pri.tone-high { color: #9f1239; }
+.pb-list-pri.tone-high { color: var(--life-overdue); }
 .pb-list-pri.tone-medium { color: var(--life-warning); }
 .pb-list-pri.tone-low { color: var(--life-muted); }
 .pb-list-date {
   font-variant-numeric: tabular-nums;
 }
-.pb-list-date.is-over { color: #9f1239; font-weight: 650; }
+.pb-list-date.is-over { color: var(--life-overdue); font-weight: 650; }
 .pb-list-min {
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -2929,12 +3440,12 @@ body {
 .today-stats,
 .today-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
 .stat-card,
-.today-metric { background: #fff; border: 1px solid var(--life-line); border-radius: 14px; padding: 16px 18px; }
+.today-metric { background: #fbf8f2; border: 1px solid var(--life-line); border-radius: 14px; padding: 16px 18px; }
 .stat-card strong { display: block; font-size: 24px; margin-top: 8px; letter-spacing: -0.03em; font-weight: 650; }
 .stat-card span { color: var(--life-muted); font-size: 12px; }
 .project-mini-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
-.project-mini-card { display: block; text-decoration: none; color: inherit; background: #fff; border: 1px solid var(--life-line); border-radius: 14px; padding: 16px; }
-.project-mini-card:hover { border-color: rgba(15, 118, 110, 0.28); box-shadow: var(--life-shadow); }
+.project-mini-card { display: block; text-decoration: none; color: inherit; background: #fbf8f2; border: 1px solid var(--life-line); border-radius: 14px; padding: 16px; }
+.project-mini-card:hover { border-color: rgba(107, 144, 128, 0.28); box-shadow: var(--life-shadow); }
 
 .day-panel-title {
   font-size: 18px;
@@ -2957,6 +3468,68 @@ body {
   margin-bottom: 16px;
   padding-bottom: 14px;
   border-bottom: 1px solid var(--life-line);
+}
+.day-panel-add {
+  margin-left: auto;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.day-panel-create {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--life-line);
+  border-radius: 10px;
+  background: var(--life-base);
+}
+.day-panel-create input,
+.day-panel-create select {
+  padding: 8px 10px;
+  border: 1px solid var(--life-line);
+  border-radius: 8px;
+  background: var(--life-raised);
+  color: var(--life-ink);
+  font: inherit;
+}
+.primary-button.sm {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+/* 快速建任务表单里日期并排一行 */
+.stack-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+/* 复盘引导填空 */
+.review-journal {
+  margin-top: 28px;
+  display: grid;
+  gap: 16px;
+}
+.review-journal-field {
+  display: grid;
+  gap: 6px;
+}
+.review-journal-label {
+  font-weight: 600;
+  font-size: 14px;
+}
+.review-journal-field textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--life-line);
+  border-radius: 10px;
+  background: var(--life-base);
+  color: var(--life-ink);
+  font: inherit;
+  resize: vertical;
+}
+.review-journal-field textarea:focus {
+  outline: none;
+  border-color: var(--life-accent);
 }
 
 .settings-card-title {
@@ -3001,6 +3574,8 @@ body {
   height: 100%;
   background: var(--life-accent);
   border-radius: inherit;
+  /* 进度条填充：inline width 变化时 0.6s 平滑推进，而非硬跳。 */
+  transition: width 0.6s var(--life-ease);
 }
 
 .calendar-toolbar {
@@ -3063,7 +3638,7 @@ body {
   letter-spacing: 0.02em;
   text-align: center;
   padding: 9px 0;
-  background: rgba(15, 23, 42, 0.018);
+  background: rgba(43, 38, 32, 0.018);
   border-bottom: 1px solid var(--life-line);
   border-right: 1px solid var(--life-line);
 }
@@ -3092,7 +3667,7 @@ body {
   border-right: 0;
 }
 .calendar-cell:hover {
-  background: rgba(15, 23, 42, 0.022);
+  background: rgba(43, 38, 32, 0.022);
 }
 .calendar-cell:focus-visible {
   outline: none;
@@ -3110,18 +3685,18 @@ body {
 
 /* today: a quiet teal tint, not a loud fill */
 .calendar-cell.today {
-  background: rgba(15, 118, 110, 0.04);
+  background: rgba(107, 144, 128, 0.04);
 }
 .calendar-cell.today .calendar-day-num span {
   color: var(--life-accent-deep);
 }
 
 .calendar-cell.selected {
-  background: rgba(15, 118, 110, 0.06);
+  background: rgba(107, 144, 128, 0.06);
   box-shadow: inset 0 0 0 1.5px var(--life-accent);
 }
 .calendar-cell.selected:hover {
-  background: rgba(15, 118, 110, 0.08);
+  background: rgba(107, 144, 128, 0.08);
 }
 .calendar-cell.selected.has-overdue {
   box-shadow: inset 0 0 0 1.5px var(--life-danger);
@@ -3284,7 +3859,7 @@ body {
   line-height: 1.4;
 }
 .day-panel-item:hover {
-  border-color: rgba(15, 118, 110, 0.35);
+  border-color: rgba(107, 144, 128, 0.35);
   box-shadow: var(--life-shadow);
 }
 .day-panel-item.done strong {
@@ -3399,7 +3974,7 @@ body {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  border: 1px dashed rgba(15, 23, 42, 0.16);
+  border: 1px dashed rgba(43, 38, 32, 0.16);
   margin-bottom: 6px;
   opacity: 0.8;
 }
@@ -3491,15 +4066,15 @@ body {
   bottom: 4px;
   width: 2px;
   border-radius: 999px;
-  background: rgba(190, 18, 60, 0.45);
+  background: rgba(181, 96, 90, 0.45);
 }
 
 .settings-danger-zone .settings-block-title {
-  color: #9f1239;
+  color: var(--life-overdue);
 }
 
 .settings-danger-zone .danger-desc {
-  color: #9f1239;
+  color: var(--life-overdue);
   opacity: 0.78;
 }
 
@@ -3510,9 +4085,9 @@ body {
 }
 
 .danger-wash-button {
-  border: 1px solid rgba(190, 18, 60, 0.28);
-  background: #fff1f2;
-  color: #9f1239;
+  border: 1px solid rgba(181, 96, 90, 0.28);
+  background: #fbf8f21f2;
+  color: var(--life-overdue);
   border-radius: 10px;
   padding: 10px 15px;
   font-weight: 600;
@@ -3524,8 +4099,8 @@ body {
 }
 
 .danger-wash-button:hover:not(:disabled) {
-  background: #ffe4e6;
-  border-color: rgba(190, 18, 60, 0.4);
+  background: #fbeae6;
+  border-color: rgba(181, 96, 90, 0.4);
 }
 
 .danger-wash-button:active:not(:disabled) {
@@ -3575,7 +4150,7 @@ body {
 }
 
 .settings-file-drop:hover {
-  border-color: rgba(15, 118, 110, 0.4);
+  border-color: rgba(107, 144, 128, 0.4);
   background: var(--life-soft);
 }
 
@@ -3618,7 +4193,7 @@ body {
 }
 
 .settings-file-drop:hover::after {
-  border-color: rgba(15, 118, 110, 0.4);
+  border-color: rgba(107, 144, 128, 0.4);
   background: var(--life-soft);
 }
 

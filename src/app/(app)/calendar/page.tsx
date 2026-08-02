@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useStore } from '@/lib/store/useStore';
-import { listTasks } from '@/lib/store/repository';
+import { listProjects, listTasks } from '@/lib/store/repository';
 import { localDateString } from '@/lib/project/date';
 import { CalendarWorkspace } from '@/components/project/CalendarWorkspace';
 
@@ -23,10 +23,16 @@ function CalendarBody() {
     () => listTasks(db).filter((task) => task.project_status !== 'archived'),
     [db],
   );
+  // 仅用于日面板里的内联建任务表单：选择项目的下拉。
+  const activeProjects = useMemo(
+    () => listProjects(db, 'active'),
+    [db],
+  );
 
   return (
     <CalendarWorkspace
       tasks={tasks}
+      projects={activeProjects}
       initialYear={year}
       initialMonth={month}
       initialView={view}

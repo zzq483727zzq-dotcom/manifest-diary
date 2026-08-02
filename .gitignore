@@ -2,6 +2,9 @@
 /.worktrees
 /worktrees
 
+# Claude Code session-local worktree cache
+/.claude/worktrees/
+
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies

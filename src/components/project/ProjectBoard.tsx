@@ -32,6 +32,7 @@ import {
   deleteProject as deleteProjectRepo,
   deleteSubtask,
   deleteTask,
+  deleteTimeEntry,
   finishTaskFocus,
   getTaskBlockers,
   getTask,
@@ -40,7 +41,9 @@ import {
   listSubtasks,
   listTaskDependencies,
   listTasks,
+  listTimeEntries,
   moveSubtask,
+  moveTaskPosition,
   pauseTimer,
   removeTaskDependency,
   setTaskBlocked,
@@ -62,9 +65,15 @@ function todayLocal() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function sortTasks(tasks: TaskWithMeta[]) {
+function sortTasks(tasks: TaskWithMeta[], manual = false): TaskWithMeta[] {
   const priorityRank: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
   return [...tasks].sort((a, b) => {
+    // 手动排序模式：完全按 position（靠 moveTaskPosition 维护），其余字段不参与。
+    // 否则用 优先级 → 截止日 → position → 创建时间 的复合排序。
+    if (manual) {
+      if (a.position !== b.position) return a.position - b.position;
+      return a.created_at.localeCompare(b.created_at);
+    }
     if (priorityRank[a.priority] !== priorityRank[b.priority]) {
       return priorityRank[a.priority] - priorityRank[b.priority];
     }
@@ -93,6 +102,9 @@ export function ProjectBoard({
     [db, project],
   );
   const [view, setView] = useState<'board' | 'list'>('board');
+  // 列表视图的手动排序开关：开启后按 position 排（靠 moveTaskPosition 维护），
+  // 关闭时走 优先级 → 截止 日的复合自动排序。只在 list 视图生效。
+  const [manualSort, setManualSort] = useState(false);
   const tasks = useMemo(() => listTasks(db, project.id), [db, project.id]);
   const [listFilter, setListFilter] = useState<'all' | 'open' | 'completed'>('all');
   const [createOpen, setCreateOpen] = useState(false);
@@ -101,6 +113,9 @@ export function ProjectBoard({
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [targetMinutes, setTargetMinutes] = useState('25');
+  // 快速建任务的截止/开始日期（可选），填补之前强制为 null 的缺口。
+  const [createDueDate, setCreateDueDate] = useState('');
+  const [createStartDate, setCreateStartDate] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [expandedCompleted, setExpandedCompleted] = useState(false);
@@ -114,6 +129,15 @@ export function ProjectBoard({
   useEffect(() => {
     window.localStorage.setItem('clarity-project-view', view);
   }, [view]);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem('clarity-manual-sort');
+    setManualSort(stored === '1');
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem('clarity-manual-sort', manualSort ? '1' : '0');
+  }, [manualSort]);
 
   useEffect(() => {
     if (initialTaskId) setDrawerTaskId(initialTaskId);
@@ -130,11 +154,11 @@ export function ProjectBoard({
   }, [tasks]);
 
   const listTasksView = useMemo(() => {
-    const sorted = sortTasks(tasks);
+    const sorted = sortTasks(tasks, manualSort);
     if (listFilter === 'open') return sorted.filter((task) => task.status !== 'completed');
     if (listFilter === 'completed') return sorted.filter((task) => task.status === 'completed');
     return sorted;
-  }, [tasks, listFilter]);
+  }, [tasks, listFilter, manualSort]);
 
   function createTaskFn(event: React.FormEvent) {
     event.preventDefault();
@@ -147,8 +171,8 @@ export function ProjectBoard({
         description,
         priority,
         target_minutes: Number(targetMinutes),
-        due_date: null,
-        start_date: null,
+        due_date: createDueDate || null,
+        start_date: createStartDate || null,
       }) as TaskInput;
       mutate((draft) => {
         createTask(draft, input);
@@ -158,6 +182,8 @@ export function ProjectBoard({
       setDescription('');
       setPriority('medium');
       setTargetMinutes('25');
+      setCreateDueDate('');
+      setCreateStartDate('');
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建失败');
     } finally {
@@ -195,6 +221,14 @@ export function ProjectBoard({
   function openTask(taskId: string) {
     setDrawerTaskId(taskId);
     router.replace(`/projects/detail?id=${project.id}&task=${taskId}`);
+  }
+
+  function moveTaskRow(taskId: string, direction: 'up' | 'down') {
+    try {
+      mutate((draft) => { moveTaskPosition(draft, taskId, direction, manualSort); });
+    } catch {
+      // silent: position swap is best-effort
+    }
   }
 
   function closeDrawer() {
@@ -431,13 +465,48 @@ export function ProjectBoard({
                 {label}
               </button>
             ))}
+            <label className="pb-manual-toggle" title="开启后按你手动排的顺序显示，关闭则自动按优先级/截止日排">
+              <input
+                type="checkbox"
+                checked={manualSort}
+                onChange={(e) => setManualSort(e.target.checked)}
+              />
+              手动排序
+            </label>
           </div>
           <div className="pb-list-rows">
-            {listTasksView.map((task) => {
+            {listTasksView.map((task, index) => {
               const overdue =
                 task.due_date && task.status !== 'completed' && task.due_date < todayLocal();
+              // 手动排序下，按方向键的禁用判定：相邻同 status 兄弟不存在时禁用。
+              const prevSibling = index > 0 ? listTasksView[index - 1] : null;
+              const nextSibling = index < listTasksView.length - 1 ? listTasksView[index + 1] : null;
+              const canMoveUp = !!prevSibling && prevSibling.status === task.status;
+              const canMoveDown = !!nextSibling && nextSibling.status === task.status;
               return (
-                <div key={task.id} className="pb-list-row">
+                <div key={task.id} className={manualSort ? 'pb-list-row pb-manual-row' : 'pb-list-row'}>
+                  {manualSort ? (
+                    <div className="pb-reorder-actions" aria-label="移动任务顺序">
+                      <button
+                        type="button"
+                        className="text-button sm"
+                        disabled={!canMoveUp}
+                        onClick={() => moveTaskRow(task.id, 'up')}
+                        title="上移"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        className="text-button sm"
+                        disabled={!canMoveDown}
+                        onClick={() => moveTaskRow(task.id, 'down')}
+                        title="下移"
+                      >
+                        ↓
+                      </button>
+                    </div>
+                  ) : null}
                   <button
                     type="button"
                     className={`pb-status sm tone-${task.status}`}
@@ -531,6 +600,25 @@ export function ProjectBoard({
                   <span>分钟</span>
                 </div>
               </label>
+              <div className="stack-form-row">
+                <label>
+                  开始日期
+                  <input
+                    type="date"
+                    value={createStartDate}
+                    onChange={(e) => setCreateStartDate(e.target.value)}
+                  />
+                </label>
+                <label>
+                  截止日期
+                  <input
+                    type="date"
+                    value={createDueDate}
+                    min={createStartDate || undefined}
+                    onChange={(e) => setCreateDueDate(e.target.value)}
+                  />
+                </label>
+              </div>
               {error ? <p className="form-error">{error}</p> : null}
               <button className="primary-button" disabled={saving} type="submit">
                 {saving ? '创建中…' : '创建任务'}
@@ -575,6 +663,8 @@ function TaskDrawer({
   const [startDate, setStartDate] = useState('');
   const [sectionError, setSectionError] = useState('');
   const [subtaskTitle, setSubtaskTitle] = useState('');
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingSubtaskTitle, setEditingSubtaskTitle] = useState('');
   const [estimateMinutes, setEstimateMinutes] = useState('25');
   const [dependencyMode, setDependencyMode] = useState<DependencyMode>('all');
   const [blockedReason, setBlockedReason] = useState('');
@@ -598,6 +688,11 @@ function TaskDrawer({
   }, [task]);
 
   const minutesTotal = task?.minutes_total ?? 0;
+  const timeEntries = useMemo(
+    () => (task ? listTimeEntries(db, taskId) : []),
+    [db, taskId, task],
+  );
+  const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
   const projectStatus = task?.project_status ?? 'active';
   const readOnly = projectStatus === 'archived';
   const dependencies = useMemo(
@@ -689,6 +784,20 @@ function TaskDrawer({
     }
   }
 
+  function removeTimeEntry(entryId: string, minutes: number) {
+    if (!window.confirm(`确定删除这条耗时记录（${formatMinutes(minutes)}）？`)) return;
+    setDeletingEntryId(entryId);
+    try {
+      mutate((draft) => {
+        deleteTimeEntry(draft, entryId);
+      });
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '删除失败');
+    } finally {
+      setDeletingEntryId(null);
+    }
+  }
+
   function addSubtask(event: React.FormEvent) {
     event.preventDefault();
     if (readOnly) return;
@@ -712,6 +821,32 @@ function TaskDrawer({
       });
     } catch {
       // silent
+    }
+  }
+
+  function startEditSubtask(subtask: Subtask) {
+    if (readOnly) return;
+    setEditingSubtaskId(subtask.id);
+    setEditingSubtaskTitle(subtask.title);
+  }
+
+  function commitEditSubtask(subtaskId: string | null) {
+    if (!subtaskId) {
+      setEditingSubtaskId(null);
+      return;
+    }
+    const trimmed = editingSubtaskTitle.trim();
+    const original = subtasks.find((item) => item.id === subtaskId)?.title ?? '';
+    setEditingSubtaskId(null);
+    setEditingSubtaskTitle('');
+    if (!trimmed || trimmed === original) return;
+    try {
+      const input = parseSubtaskInput({ title: trimmed });
+      mutate((draft) => {
+        updateSubtask(draft, subtaskId, input);
+      });
+    } catch (err) {
+      setSectionError(err instanceof Error ? err.message : '保存失败');
     }
   }
 
@@ -1046,7 +1181,35 @@ function TaskDrawer({
                         onChange={() => void toggleSubtask(subtask)}
                       />
                     </label>
-                    <span className={subtask.is_done ? 'is-done' : undefined}>{subtask.title}</span>
+                    {editingSubtaskId === subtask.id && !readOnly ? (
+                      <input
+                        className="subtask-edit-input"
+                        value={editingSubtaskTitle}
+                        autoFocus
+                        maxLength={120}
+                        onChange={(e) => setEditingSubtaskTitle(e.target.value)}
+                        onBlur={() => commitEditSubtask(subtask.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            (e.currentTarget as HTMLInputElement).blur();
+                          } else if (e.key === 'Escape') {
+                            setEditingSubtaskId(null);
+                            setEditingSubtaskTitle('');
+                          }
+                        }}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className={`subtask-title-btn${subtask.is_done ? ' is-done' : ''}`}
+                        disabled={readOnly}
+                        title={readOnly ? subtask.title : '点击改名'}
+                        onClick={() => startEditSubtask(subtask)}
+                      >
+                        {subtask.title}
+                      </button>
+                    )}
                     {!readOnly ? (
                       <div className="subtask-actions">
                         <button
@@ -1100,6 +1263,29 @@ function TaskDrawer({
                 <strong>专注时间</strong>
                 <span>累计 {formatMinutes(minutesTotal)}</span>
               </div>
+              {timeEntries.length > 0 ? (
+                <div className="time-entry-list drawer-time-list">
+                  {timeEntries.map((entry) => (
+                    <div key={entry.id} className="drawer-time-row">
+                      <span className="drawer-time-date">{entry.logged_date}</span>
+                      <strong className="drawer-time-mins">{formatMinutes(entry.minutes)}</strong>
+                      <span className="drawer-time-note">{entry.note || '专注计时'}</span>
+                      {!readOnly ? (
+                        <button
+                          type="button"
+                          className="text-button danger-text"
+                          disabled={deletingEntryId === entry.id}
+                          onClick={() => removeTimeEntry(entry.id, entry.minutes)}
+                        >
+                          删除
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">还没有专注计时记录。</p>
+              )}
             </section>
 
             {bypasses.length > 0 ? (

@@ -23,6 +23,12 @@ import {
 let cache: ClarityDB = loadDB();
 let listeners = new Set<() => void>();
 
+// `useSyncExternalStore`'s `getServerSnapshot` must return a stable reference,
+// otherwise React detects a changing snapshot on every render and loops
+// ("The result of getServerSnapshot should be cached to avoid an infinite
+// loop"). We cache one empty DB for the lifetime of the module.
+const serverSnapshot = emptyDB();
+
 // Re-read from localStorage on every page show, fixing HMR cache staleness
 // in dev mode where the module-level `cache` survives across navigations.
 if (typeof window !== 'undefined') {
@@ -57,7 +63,7 @@ function getSnapshot(): ClarityDB {
 }
 
 function getServerSnapshot(): ClarityDB {
-  return emptyDB();
+  return serverSnapshot;
 }
 
 /** Read the live DB. Re-renders on mutation. */
