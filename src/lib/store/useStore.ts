@@ -23,6 +23,15 @@ import {
 let cache: ClarityDB = loadDB();
 let listeners = new Set<() => void>();
 
+// Re-read from localStorage on every page show, fixing HMR cache staleness
+// in dev mode where the module-level `cache` survives across navigations.
+if (typeof window !== 'undefined') {
+  window.addEventListener('pageshow', () => {
+    cache = loadDB();
+    emit();
+  });
+}
+
 function emit() {
   for (const listener of listeners) listener();
 }
